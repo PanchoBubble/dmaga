@@ -1,0 +1,63 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: pnpm dev
+    environment:
+      DATABASE_URL: postgresql://dmaga:dmaga@postgres:5432/dmaga
+      REDIS_URL: redis://redis:6379
+      FLARESOLVERR_URL: http://flaresolverr:8191/v1
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      HOST_DOWNLOAD_DIR: /downloads
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - downloads:/downloads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      flaresolverr:
+        condition: service_started
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: dmaga
+      POSTGRES_PASSWORD: dmaga
+      POSTGRES_DB: dmaga
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dmaga -d dmaga"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    environment:
+      LOG_LEVEL: info
+      TZ: Europe/London
+    ports:
+      - "8191:8191"
+
+volumes:
+  postgres-data:
+  downloads:
