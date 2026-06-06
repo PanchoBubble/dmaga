@@ -174,6 +174,39 @@ const definitions: Record<string, CardigannDefinition> = {
       return normalizePirateBay(config, payload, params.limit);
     },
   },
+  "prowlarr-public-limetorrents": {
+    key: "prowlarr-public-limetorrents",
+    search: async (config, params) => {
+      const url = new URL(
+        `/search/all/${slugifySearch(params.query)}/seeds/1/`,
+        config.baseUrl,
+      );
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeLimeTorrents(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-torrentdownloads": {
+    key: "prowlarr-public-torrentdownloads",
+    search: async (config, params) => {
+      const url = new URL("/search/", config.baseUrl);
+      url.searchParams.set("search", params.query);
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeTorrentDownloads(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-torrentgalaxyclone": {
+    key: "prowlarr-public-torrentgalaxyclone",
+    search: async (config, params) => {
+      const url = new URL(
+        `/get-posts/keywords:${encodeURIComponent(params.query)}/`,
+        config.baseUrl,
+      );
+      const html = await fetchIndexerText(config, url.toString());
+      // TorrentGalaxy lists magnet links inline, so we parse them directly
+      // rather than following each result to a detail page.
+      return normalizeMagnetListing(config, html, params.limit);
+    },
+  },
 };
 
 async function normalize1337x(
@@ -379,6 +412,188 @@ function normalizePirateBay(
           : config.baseUrl,
       };
     });
+}
+
+/**
+ * LimeTorrents lists results in a `table2` whose rows link to detail pages of
+ * the form `…-torrent-<id>.html`. The magnet lives on the detail page (like
+ * 1337x), so we follow each row to resolve it. Size/seeders/leechers come from
+ * the listing row's trailing cells.
+ */
+async function normalizeLimeTorrents(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): Promise<TorrentSearchResult[]> {
+  const rows = [...html.matchAll(/<tr\b[\s\S]*?<\/tr>/gi)]
+    .map((match) => match[0])
+    .filter((row) => /href=["'][^"']*-torrent-\d+\.html["']/i.test(row))
+    .slice(0, limit ?? 20);
+
+  const results = await Promise.all(
+    rows.map(async (row) => {
+      const link = row.match(
+        /<a\b[^>]*href=["']([^"']*-torrent-\d+\.html)["'][^>]*>([\s\S]*?)<\/a>/i,
+      );
+      const detailPath = htmlDecode(link?.[1]);
+      const title = cleanText(link?.[2]) ?? "Untitled";
+      const detailUrl = detailPath
+        ? new URL(detailPath, config.baseUrl).toString()
+        : undefined;
+      const { magnet, infoHash } = detailUrl
+        ? await resolveMagnetFromDetail(config, detailUrl, title)
+        : { magnet: undefined, infoHash: undefined };
+      const cells = tableCells(row);
+
+      return {
+        id: `${config.id}:${infoHash ?? detailPath ?? title}`,
+        title,
+        // cells: [name, added, size, seed, leech, health]
+        sizeBytes: parseSize(cells[2]),
+        seeders: toNumber(cells[3]),
+        leechers: toNumber(cells[4]),
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: magnet,
+        infoHash,
+        sourceUrl: detailUrl,
+      };
+    }),
+  );
+
+  return results.filter((result) => result.magnetUrl || result.infoHash);
+}
+
+/**
+ * Torrent Downloads links each result to `/torrent/<id>/<slug>`; the magnet (or
+ * a labelled infohash) is on that detail page. We de-duplicate the listing
+ * links, then resolve magnets per result.
+ */
+async function normalizeTorrentDownloads(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): Promise<TorrentSearchResult[]> {
+  const seen = new Set<string>();
+  const links: Array<{ path: string; title: string }> = [];
+  for (const match of html.matchAll(
+    /<a\b[^>]*href=["'](\/torrent\/\d+\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
+  )) {
+    const path = htmlDecode(match[1])!;
+    if (seen.has(path)) {
+      continue;
+    }
+    seen.add(path);
+    links.push({ path, title: cleanText(match[2]) ?? "Untitled" });
+    if (links.length >= (limit ?? 20)) {
+      break;
+    }
+  }
+
+  const results = await Promise.all(
+    links.map(async ({ path, title }) => {
+      const detailUrl = new URL(path, config.baseUrl).toString();
+      const { magnet, infoHash } = await resolveMagnetFromDetail(
+        config,
+        detailUrl,
+        title,
+      );
+      return {
+        id: `${config.id}:${infoHash ?? path}`,
+        title,
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: magnet,
+        infoHash,
+        sourceUrl: detailUrl,
+      };
+    }),
+  );
+
+  return results.filter((result) => result.magnetUrl || result.infoHash);
+}
+
+/**
+ * Generic normalizer for sites that expose magnet links directly in their
+ * search HTML (e.g. TorrentGalaxy). Each magnet carries the info hash and a
+ * `dn` display name, so no detail-page round-trip is needed. De-duplicates by
+ * info hash.
+ */
+function normalizeMagnetListing(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  const seen = new Set<string>();
+  const results: TorrentSearchResult[] = [];
+
+  for (const magnet of extractMagnets(html)) {
+    const infoHash = infoHashFromMagnet(magnet);
+    const key = infoHash ?? magnet;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    results.push({
+      id: `${config.id}:${key}`,
+      title: magnetTitle(magnet) ?? "Untitled",
+      indexerId: config.id,
+      indexerName: config.name,
+      magnetUrl: magnet,
+      infoHash,
+      sourceUrl: config.baseUrl,
+    });
+    if (results.length >= (limit ?? 20)) {
+      break;
+    }
+  }
+
+  return results;
+}
+
+/** Pulls every magnet URI out of an HTML blob, decoding entity-escaped `&`. */
+function extractMagnets(html: string): string[] {
+  return [...html.matchAll(/magnet:\?xt=urn:btih:[^\s"'<>]+/gi)].map(
+    (match) => htmlDecode(match[0])!,
+  );
+}
+
+/** Extracts the `dn` (display name) from a magnet URI, if present. */
+function magnetTitle(magnet: string): string | undefined {
+  const match = magnet.match(/[?&]dn=([^&]+)/i);
+  if (!match) {
+    return undefined;
+  }
+  try {
+    return cleanText(decodeURIComponent(match[1].replace(/\+/g, " ")));
+  } catch {
+    return cleanText(match[1]);
+  }
+}
+
+/** Finds a labelled 40-hex infohash (e.g. "Infohash: …") in a detail page. */
+function infoHashFromText(html: string): string | undefined {
+  const match = html.match(/info\s*-?\s*hash[^a-f0-9]{0,24}([a-f0-9]{40})/i);
+  return normalizeHash(match?.[1]);
+}
+
+/**
+ * Fetches a result's detail page and resolves its magnet — preferring an inline
+ * magnet link, then a labelled infohash (rebuilt into a magnet). Swallows fetch
+ * errors so one dead detail page doesn't fail the whole search.
+ */
+async function resolveMagnetFromDetail(
+  config: IndexerConfig,
+  detailUrl: string,
+  title: string | undefined,
+): Promise<{ magnet: string | undefined; infoHash: string | undefined }> {
+  const html = await fetchIndexerText(config, detailUrl).catch(() => "");
+  const magnet = pickMagnet(...extractMagnets(html));
+  const infoHash = infoHashFromMagnet(magnet) ?? infoHashFromText(html);
+  return {
+    magnet: magnet ?? (infoHash ? magnetFromInfoHash(infoHash, title) : undefined),
+    infoHash,
+  };
 }
 
 function presetKeyOf(config: IndexerConfig): string | undefined {
