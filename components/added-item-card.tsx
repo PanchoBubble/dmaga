@@ -7,9 +7,11 @@ import {
   Download,
   Loader2,
   MoreHorizontal,
+  Play,
   Trash2,
   XCircle,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -40,6 +42,8 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
   const downloadLinks = item.links.filter(
     (link) => link.unrestrictedLink || link.originalLink,
   );
+  const streamableLinks = downloadLinks.filter((link) => link.streamable);
+  const primaryStreamLink = streamableLinks[0];
 
   async function runAction(action: "remove_local" | "delete_from_debrid") {
     setPendingAction(action);
@@ -180,19 +184,37 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
       {isReady && downloadLinks.length ? (
         <div className="mt-3 space-y-2">
           {downloadLinks.slice(0, 3).map((link) => (
-            <div className="w-full justify-between px-3" key={link.id}>
-              <Button asChild className="w-full justify-between px-3" variant="outline">
-                <a
-                  href={link.unrestrictedLink ?? link.originalLink}
-                  rel="noreferrer"
-                  target="_blank"
+            <div className="w-full px-3" key={link.id}>
+              <div className="flex w-full gap-2">
+                <Button
+                  asChild
+                  className="min-w-0 flex-1 justify-between px-3"
+                  variant="outline"
                 >
-                  <span className="truncate">{link.fileName}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatBytes(link.fileSizeBytes ?? undefined)}
-                  </span>
-                </a>
-              </Button>
+                  <a
+                    href={link.unrestrictedLink ?? link.originalLink}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <span className="truncate">{link.fileName}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatBytes(link.fileSizeBytes ?? undefined)}
+                    </span>
+                  </a>
+                </Button>
+                {link.streamable ? (
+                  <Button
+                    asChild
+                    aria-label={`Play ${link.fileName}`}
+                    size="icon"
+                    variant="outline"
+                  >
+                    <Link href={`/player/${link.id}`}>
+                      <Play className="size-4" />
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
               {link.hostDownload ? (
                 <p className="mt-1 text-xs font-bold text-muted-foreground">
                   Host download: {hostDownloadLabel(link)}
@@ -217,7 +239,7 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
           {pendingHostDownloadId ? "Queueing" : "Host download"}
         </Button>
         {isReady && downloadLinks.length ? (
-          <Button asChild>
+          <Button asChild variant="outline">
             <a
               href={downloadLinks[0].unrestrictedLink ?? downloadLinks[0].originalLink}
               rel="noreferrer"
@@ -227,9 +249,17 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
               Open link
             </a>
           </Button>
-        ) : (
+        ) : null}
+        {isReady && primaryStreamLink ? (
+          <Button asChild>
+            <Link href={`/player/${primaryStreamLink.id}`}>
+              <Play className="size-4" />
+              Play
+            </Link>
+          </Button>
+        ) : !isReady ? (
           <Button disabled>{debridStatusLabel(item.status)}</Button>
-        )}
+        ) : null}
       </div>
     </article>
   );
