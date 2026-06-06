@@ -1,4 +1,30 @@
 services:
+  nordvpn:
+    image: ghcr.io/bubuntux/nordvpn:latest
+    container_name: dmaga-nordvpn
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun
+    environment:
+      TOKEN: ${NORDVPN_TOKEN:?Set NORDVPN_TOKEN in .env before starting the VPN-routed stack}
+      TECHNOLOGY: NordLynx
+      KILLSWITCH: "on"
+      CONNECT: ${NORDVPN_CONNECT:-United_Kingdom}
+      TZ: Europe/London
+    ports:
+      # Ports for services that share this container's network namespace.
+      - "3000:3000"
+      - "8191:8191"
+    healthcheck:
+      test: ["CMD-SHELL", "nordvpn status | grep -q 'Status: Connected'"]
+      interval: 30s
+      timeout: 10s
+      retries: 6
+      start_period: 60s
+
   app:
     build:
       context: .
@@ -6,23 +32,22 @@ services:
     container_name: dmaga-app
     command: pnpm dev
     restart: unless-stopped
-    # Optional secrets (Real-Debrid client + token encryption key) are read
-    # from .env when present; network URLs below always win for in-cluster DNS.
-    env_file:
-      - path: .env
-        required: false
+    network_mode: service:nordvpn
+    # Optional secrets are interpolated from .env when present; network URLs
+    # below always win for in-cluster DNS.
     environment:
       DATABASE_URL: postgresql://dmaga:dmaga@postgres:5432/dmaga
       REDIS_URL: redis://redis:6379
-      FLARESOLVERR_URL: http://flaresolverr:8191/v1
+      FLARESOLVERR_URL: http://127.0.0.1:8191/v1
+      REAL_DEBRID_CLIENT_ID: ${REAL_DEBRID_CLIENT_ID:-}
+      REAL_DEBRID_CLIENT_SECRET: ${REAL_DEBRID_CLIENT_SECRET:-}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
       # Override with http://MACHINE_IP:3000 when accessing from other LAN devices.
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       HOST_DOWNLOAD_DIR: /downloads
       # inotify events don't cross the podman VM bind mount on macOS, so the
       # Next.js (webpack) dev watcher never sees host edits. Poll instead → HMR works.
       WATCHPACK_POLLING: "true"
-    ports:
-      - "3000:3000"
     volumes:
       - .:/app
       # Keep container-managed build artefacts out of the host bind mount so a
@@ -37,6 +62,8 @@ services:
       retries: 10
       start_period: 40s
     depends_on:
+      nordvpn:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -51,19 +78,22 @@ services:
     container_name: dmaga-debrid-poller
     command: pnpm worker:debrid
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: false
+    network_mode: service:nordvpn
     environment:
       DATABASE_URL: postgresql://dmaga:dmaga@postgres:5432/dmaga
       REDIS_URL: redis://redis:6379
-      FLARESOLVERR_URL: http://flaresolverr:8191/v1
+      FLARESOLVERR_URL: http://127.0.0.1:8191/v1
+      REAL_DEBRID_CLIENT_ID: ${REAL_DEBRID_CLIENT_ID:-}
+      REAL_DEBRID_CLIENT_SECRET: ${REAL_DEBRID_CLIENT_SECRET:-}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
       HOST_DOWNLOAD_DIR: /downloads
     volumes:
       - .:/app
       - /app/node_modules
       - downloads:/downloads
     depends_on:
+      nordvpn:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -106,17 +136,19 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: dmaga-flaresolverr
     restart: unless-stopped
+    network_mode: service:nordvpn
     environment:
       LOG_LEVEL: info
       TZ: Europe/London
-    ports:
-      - "8191:8191"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8191/health"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 30s
+    depends_on:
+      nordvpn:
+        condition: service_healthy
 
 volumes:
   postgres-data:
