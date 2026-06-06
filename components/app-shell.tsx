@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Database, Link2 } from "lucide-react";
+import { Check, Database, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { navigationItems } from "@/lib/navigation";
@@ -49,17 +49,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const realDebridLabel = realDebridStatus.linked
-    ? realDebridStatus.username
-      ? realDebridStatus.username
-      : "linked"
-    : "offline";
-
   const serviceCounts = [
     { label: "Indexers", value: "0", icon: Database },
     { label: "Added", value: "0", icon: navigationItems[1].icon },
     { label: "Saved", value: "1", icon: navigationItems[2].icon },
   ];
+  const RealDebridIcon = realDebridStatus.linked ? Check : X;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -80,8 +75,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <div className="flex h-10 shrink-0 items-center justify-end gap-1 text-xs font-black uppercase lg:hidden">
               <span className="inline-flex h-8 items-center gap-1 border-2 border-foreground bg-background px-2">
-                <Link2 className="size-3.5" />
-                <span>RD: {realDebridLabel}</span>
+                <span>RD</span>
+                <RealDebridIcon
+                  className={cn(
+                    "size-4",
+                    realDebridStatus.linked ? "text-primary" : "text-destructive",
+                  )}
+                />
               </span>
               {serviceCounts.map((state) => {
                 const Icon = state.icon;
@@ -127,8 +127,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <div className="hidden h-10 items-center justify-end gap-2 text-xs font-black uppercase lg:col-start-3 lg:row-start-1 lg:flex">
               <span className="inline-flex h-10 items-center gap-1 border-2 border-foreground bg-background px-2">
-                <Link2 className="size-3.5" />
-                <span>RD: {realDebridLabel}</span>
+                <span>RD</span>
+                <RealDebridIcon
+                  className={cn(
+                    "size-4",
+                    realDebridStatus.linked ? "text-primary" : "text-destructive",
+                  )}
+                />
               </span>
               {serviceCounts.map((state) => {
                 const Icon = state.icon;
