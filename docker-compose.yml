@@ -3,19 +3,36 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: dmaga-app
     command: pnpm dev
+    restart: unless-stopped
+    # Optional secrets (Real-Debrid client + token encryption key) are read
+    # from .env when present; network URLs below always win for in-cluster DNS.
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql://dmaga:dmaga@postgres:5432/dmaga
       REDIS_URL: redis://redis:6379
       FLARESOLVERR_URL: http://flaresolverr:8191/v1
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      # Override with http://MACHINE_IP:3000 when accessing from other LAN devices.
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       HOST_DOWNLOAD_DIR: /downloads
     ports:
       - "3000:3000"
     volumes:
       - .:/app
+      # Keep container-managed build artefacts out of the host bind mount so a
+      # host-built (and platform-mismatched) cache can't corrupt the container.
       - /app/node_modules
+      - /app/.next
       - downloads:/downloads
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -26,6 +43,8 @@ services:
 
   postgres:
     image: postgres:17-alpine
+    container_name: dmaga-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: dmaga
       POSTGRES_PASSWORD: dmaga
@@ -42,8 +61,13 @@ services:
 
   redis:
     image: redis:8-alpine
+    container_name: dmaga-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -52,12 +76,21 @@ services:
 
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: dmaga-flaresolverr
+    restart: unless-stopped
     environment:
       LOG_LEVEL: info
       TZ: Europe/London
     ports:
       - "8191:8191"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8191/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 volumes:
   postgres-data:
+  redis-data:
   downloads:
