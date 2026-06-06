@@ -3,19 +3,63 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { navigationItems } from "@/lib/navigation";
 
-const serviceState = [
-  { label: "RD", value: "offline" },
-  { label: "Indexers", value: "0" },
-  { label: "Added", value: "0" },
-  { label: "Saved", value: "1" },
-];
+type RealDebridStatus = {
+  linked: boolean;
+  username?: string | null;
+};
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [realDebridStatus, setRealDebridStatus] = useState<RealDebridStatus>({
+    linked: false,
+  });
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadRealDebridStatus() {
+      try {
+        const response = await fetch("/api/auth/real-debrid/status", {
+          cache: "no-store",
+        });
+
+        if (!response.ok || ignore) {
+          return;
+        }
+
+        setRealDebridStatus((await response.json()) as RealDebridStatus);
+      } catch {
+        if (!ignore) {
+          setRealDebridStatus({ linked: false });
+        }
+      }
+    }
+
+    void loadRealDebridStatus();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const serviceState = [
+    {
+      label: "RD",
+      value: realDebridStatus.linked
+        ? realDebridStatus.username
+          ? realDebridStatus.username
+          : "linked"
+        : "offline",
+    },
+    { label: "Indexers", value: "0" },
+    { label: "Added", value: "0" },
+    { label: "Saved", value: "1" },
+  ];
 
   return (
     <div className="min-h-screen bg-background text-foreground">

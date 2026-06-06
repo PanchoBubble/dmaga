@@ -5,6 +5,7 @@ import {
   createRealDebridOAuthClient,
   persistRealDebridTokens,
 } from "@/lib/server/real-debrid/auth-service";
+import { RealDebridOAuthError } from "@/lib/server/real-debrid/oauth";
 
 const requestSchema = z.object({
   deviceCode: z.string().min(1),
@@ -32,6 +33,17 @@ export async function POST(request: NextRequest) {
       accountId: account.accountId,
     });
   } catch (error) {
+    if (error instanceof RealDebridOAuthError && error.status === 400) {
+      return NextResponse.json(
+        {
+          linked: false,
+          pending: true,
+          error: "Waiting for Real-Debrid authorization.",
+        },
+        { status: 202 },
+      );
+    }
+
     return NextResponse.json(
       {
         error:
