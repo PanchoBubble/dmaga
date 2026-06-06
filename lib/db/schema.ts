@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -12,7 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const fetchModeEnum = pgEnum("fetch_mode", ["direct", "flaresolverr"]);
-export const indexerTypeEnum = pgEnum("indexer_type", ["torznab"]);
+export const indexerTypeEnum = pgEnum("indexer_type", ["torznab", "cardigann"]);
 export const debridItemStatusEnum = pgEnum("debrid_item_status", [
   "saved",
   "adding",
@@ -98,7 +99,7 @@ export const mediaItems = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     title: text("title").notNull(),
     normalizedTitle: text("normalized_title").notNull(),
-    sizeBytes: integer("size_bytes"),
+    sizeBytes: bigint("size_bytes", { mode: "number" }),
     seeders: integer("seeders"),
     leechers: integer("leechers"),
     publishedAt: timestamp("published_at", { withTimezone: true }),
@@ -178,7 +179,7 @@ export const debridLinks = pgTable(
       .notNull()
       .references(() => debridItems.id, { onDelete: "cascade" }),
     fileName: text("file_name").notNull(),
-    fileSizeBytes: integer("file_size_bytes"),
+    fileSizeBytes: bigint("file_size_bytes", { mode: "number" }),
     host: text("host"),
     originalLink: text("original_link").notNull(),
     unrestrictedLink: text("unrestricted_link"),
@@ -198,7 +199,9 @@ export const hostDownloads = pgTable(
       .references(() => debridLinks.id, { onDelete: "cascade" }),
     status: hostDownloadStatusEnum("status").notNull().default("queued"),
     targetPath: text("target_path").notNull(),
-    bytesDownloaded: integer("bytes_downloaded").notNull().default(0),
+    bytesDownloaded: bigint("bytes_downloaded", { mode: "number" })
+      .notNull()
+      .default(0),
     errorMessage: text("error_message"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),

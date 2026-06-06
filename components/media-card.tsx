@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { CheckCircle2, Download, Plus, Star } from "lucide-react";
+import { Check, Download, Plus, Star } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { MediaItem } from "@/lib/mock-media";
@@ -15,6 +17,39 @@ type MediaCardProps = {
 
 export function MediaCard({ item, index = 0 }: MediaCardProps) {
   const isReady = item.debridState === "ready";
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [tooltipPos, setTooltipPos] = useState<{ top: number; right: number } | null>(
+    null,
+  );
+  const badgeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!tooltipOpen) return;
+
+    const place = () => {
+      const rect = badgeRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setTooltipPos({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      });
+    };
+    place();
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!badgeRef.current?.contains(event.target as Node)) {
+        setTooltipOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [tooltipOpen]);
 
   return (
     <motion.article
@@ -40,6 +75,30 @@ export function MediaCard({ item, index = 0 }: MediaCardProps) {
         <div className="absolute bottom-2 left-2 right-2 border-2 border-foreground bg-background px-2 py-1 text-center text-xs font-black">
           Preview
         </div>
+        {isReady ? (
+          <button
+            aria-expanded={tooltipOpen}
+            aria-label="Available in Debrid"
+            className="absolute right-1 top-1 z-10 inline-flex size-5 items-center justify-center border-2 border-foreground bg-secondary text-secondary-foreground"
+            onClick={() => setTooltipOpen((open) => !open)}
+            ref={badgeRef}
+            type="button"
+          >
+            <Check className="size-3" strokeWidth={3} />
+          </button>
+        ) : null}
+        {tooltipOpen && tooltipPos
+          ? createPortal(
+              <div
+                className="fixed z-50 whitespace-nowrap border-2 border-foreground bg-background px-2 py-1 text-xs font-black shadow-line"
+                role="tooltip"
+                style={{ top: tooltipPos.top, right: tooltipPos.right }}
+              >
+                Available In Debrid
+              </div>,
+              document.body,
+            )
+          : null}
       </div>
 
       <div className="flex min-w-0 flex-col">
@@ -53,9 +112,11 @@ export function MediaCard({ item, index = 0 }: MediaCardProps) {
           <Button
             aria-label={item.saved ? "Remove from saved" : "Save torrent"}
             size="icon"
-            variant={item.saved ? "secondary" : "outline"}
+            variant="outline"
           >
-            <Star className={cn("size-5", item.saved && "fill-current")} />
+            <Star
+              className={cn("size-5", item.saved && "fill-yellow-400 text-yellow-400")}
+            />
           </Button>
         </div>
 
@@ -75,13 +136,6 @@ export function MediaCard({ item, index = 0 }: MediaCardProps) {
             </span>
           ))}
         </div>
-
-        {isReady ? (
-          <div className="mt-4 inline-flex w-fit items-center gap-2 border-2 border-foreground bg-secondary px-2 py-1 text-xs font-black">
-            <CheckCircle2 className="size-4" />
-            In Debrid
-          </div>
-        ) : null}
 
         <div className="mt-auto flex flex-wrap justify-end gap-2 pt-4">
           <Button className="px-3" variant="outline">

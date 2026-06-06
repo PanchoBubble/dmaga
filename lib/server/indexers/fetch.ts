@@ -5,7 +5,22 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 type FetchOptions = {
   timeoutMs?: number;
+  /** Cancels the request when the caller (e.g. a streaming search) aborts. */
+  signal?: AbortSignal;
 };
+
+/** Aborts when either the timeout fires or the caller's signal aborts. */
+function withTimeout(
+  timeoutMs: number,
+  signal: AbortSignal | undefined,
+): { signal: AbortSignal; clear: () => void } {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
+    clear: () => clearTimeout(timeout),
+  };
+}
 
 /**
  * Fetches the raw text body for an indexer request, honoring the indexer's
@@ -22,22 +37,25 @@ export async function fetchIndexerText(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return config.fetchMode === "flaresolverr"
-    ? fetchViaFlaresolverr(config, url, timeoutMs)
-    : fetchDirect(config, url, timeoutMs);
+    ? fetchViaFlaresolverr(config, url, timeoutMs, options.signal)
+    : fetchDirect(config, url, timeoutMs, options.signal);
 }
 
 async function fetchDirect(
   config: IndexerConfig,
   url: string,
   timeoutMs: number,
+  callerSignal?: AbortSignal,
 ): Promise<string> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const { signal, clear } = withTimeout(timeoutMs, callerSignal);
 
   try {
     const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { Accept: "application/rss+xml, application/xml, text/xml" },
+      signal,
+      headers: {
+        Accept:
+          "application/rss+xml, application/xml, text/xml, application/json, text/html",
+      },
     });
 
     if (!response.ok) {
@@ -64,7 +82,7 @@ async function fetchDirect(
       cause,
     });
   } finally {
-    clearTimeout(timeout);
+    clear();
   }
 }
 
@@ -78,15 +96,15 @@ async function fetchViaFlaresolverr(
   config: IndexerConfig,
   url: string,
   timeoutMs: number,
+  callerSignal?: AbortSignal,
 ): Promise<string> {
-  const controller = new AbortController();
   // Give FlareSolverr's own challenge solving headroom beyond our wait budget.
-  const timeout = setTimeout(() => controller.abort(), timeoutMs + 5_000);
+  const { signal, clear } = withTimeout(timeoutMs + 5_000, callerSignal);
 
   try {
     const response = await fetch(env.FLARESOLVERR_URL, {
       method: "POST",
-      signal: controller.signal,
+      signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         cmd: "request.get",
@@ -128,6 +146,6 @@ async function fetchViaFlaresolverr(
       cause,
     });
   } finally {
-    clearTimeout(timeout);
+    clear();
   }
 }

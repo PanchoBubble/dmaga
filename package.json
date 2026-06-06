@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.8.0",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
+    "worker:debrid": "tsx scripts/real-debrid-poller.ts",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "lint": "eslint . --max-warnings=0",
@@ -30,6 +31,7 @@
     "postgres": "^3.4.9",
     "react": "latest",
     "react-dom": "latest",
+    "redis": "^6.0.0",
     "tailwind-merge": "latest",
     "tailwindcss-animate": "latest",
     "zod": "latest",
@@ -47,6 +49,7 @@
     "prettier": "^3.8.3",
     "shadcn": "latest",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.22.4",
     "typescript": "latest"
   }
 }

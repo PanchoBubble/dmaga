@@ -18,6 +18,9 @@ services:
       # Override with http://MACHINE_IP:3000 when accessing from other LAN devices.
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       HOST_DOWNLOAD_DIR: /downloads
+      # inotify events don't cross the podman VM bind mount on macOS, so the
+      # Next.js (webpack) dev watcher never sees host edits. Poll instead → HMR works.
+      WATCHPACK_POLLING: "true"
     ports:
       - "3000:3000"
     volumes:
@@ -40,6 +43,31 @@ services:
         condition: service_healthy
       flaresolverr:
         condition: service_started
+
+  debrid-poller:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dmaga-debrid-poller
+    command: pnpm worker:debrid
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://dmaga:dmaga@postgres:5432/dmaga
+      REDIS_URL: redis://redis:6379
+      FLARESOLVERR_URL: http://flaresolverr:8191/v1
+      HOST_DOWNLOAD_DIR: /downloads
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - downloads:/downloads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   postgres:
     image: postgres:17-alpine

@@ -3,18 +3,17 @@
  *
  * An {@link IndexerAdapter} takes a stored {@link IndexerConfig} plus runtime
  * {@link TorrentSearchParams} and returns a normalized list of
- * {@link TorrentSearchResult}. Phase 1 ships a generic Torznab adapter; the
- * `type` discriminator and the per-adapter `settings` bag leave room for
- * definition-based (Cardigann-style) indexers later without changing callers.
+ * {@link TorrentSearchResult}. Phase 1 ships Torznab plus a native
+ * Cardigann-style public preset adapter.
  */
 
 export type IndexerFetchMode = "direct" | "flaresolverr";
 
 /**
- * Adapter discriminator. Only `"torznab"` exists today; future definition-based
- * indexers add a variant here and register an adapter in the registry.
+ * Adapter discriminator. `cardigann` is used for native public Prowlarr
+ * definitions that the app can execute without a Torznab proxy.
  */
-export type IndexerType = "torznab";
+export type IndexerType = "torznab" | "cardigann";
 
 export type IndexerConfig = {
   id: string;
@@ -38,6 +37,8 @@ export type TorrentSearchParams = {
   categories?: string[];
   /** Soft cap on results requested from the indexer. */
   limit?: number;
+  /** Aborts the underlying fetch when the client cancels or disconnects. */
+  signal?: AbortSignal;
 };
 
 export type TorrentSearchResult = {
@@ -56,6 +57,12 @@ export type TorrentSearchResult = {
   sourceUrl?: string;
 };
 
+/** Outcome of an adapter connectivity/auth probe. */
+export type IndexerTestOutcome = {
+  ok: boolean;
+  message: string;
+};
+
 export interface IndexerAdapter {
   /** The {@link IndexerType} this adapter handles; used for registry lookup. */
   readonly type: IndexerType;
@@ -63,6 +70,11 @@ export interface IndexerAdapter {
     config: IndexerConfig,
     params: TorrentSearchParams,
   ): Promise<TorrentSearchResult[]>;
+  /**
+   * Probes the indexer (reachability + credentials) without persisting. Throws
+   * an {@link IndexerError} on failure so callers can surface the reason.
+   */
+  test(config: IndexerConfig): Promise<IndexerTestOutcome>;
 }
 
 /** Raised when an indexer fetch or parse fails; carries indexer identity. */

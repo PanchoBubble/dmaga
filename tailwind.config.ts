@@ -3,6 +3,11 @@ import tailwindcssAnimate from "tailwindcss-animate";
 
 const config: Config = {
   darkMode: ["class"],
+  // Only apply `hover:` utilities on devices that truly support hover, so
+  // mobile/touch taps don't trigger sticky hover states.
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     container: {

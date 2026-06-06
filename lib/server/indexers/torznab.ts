@@ -5,6 +5,7 @@ import {
   IndexerError,
   type IndexerAdapter,
   type IndexerConfig,
+  type IndexerTestOutcome,
   type IndexerType,
   type TorrentSearchParams,
   type TorrentSearchResult,
@@ -44,7 +45,9 @@ export class TorznabIndexerAdapter implements IndexerAdapter {
     params: TorrentSearchParams,
   ): Promise<TorrentSearchResult[]> {
     const url = this.buildSearchUrl(config, params);
-    const xml = await fetchIndexerText(config, url.toString());
+    const xml = await fetchIndexerText(config, url.toString(), {
+      signal: params.signal,
+    });
 
     let parsed: { rss?: { channel?: { item?: TorznabItem[]; error?: unknown } } };
     try {
@@ -72,6 +75,52 @@ export class TorznabIndexerAdapter implements IndexerAdapter {
 
     const items = channel?.item ?? [];
     return items.map((item) => this.normalizeItem(config, item));
+  }
+
+  /**
+   * Probes the Torznab capabilities endpoint (`t=caps`). A well-formed `<caps>`
+   * document confirms the base URL is reachable and the API key (if any) is
+   * accepted; a `<error>` element or unexpected body fails the test.
+   */
+  async test(config: IndexerConfig): Promise<IndexerTestOutcome> {
+    const url = new URL(config.baseUrl);
+    url.searchParams.set("t", "caps");
+    if (config.apiKey) {
+      url.searchParams.set("apikey", config.apiKey);
+    }
+
+    const xml = await fetchIndexerText(config, url.toString());
+
+    let parsed: { caps?: { error?: unknown }; error?: unknown };
+    try {
+      parsed = parser.parse(xml);
+    } catch (cause) {
+      throw new IndexerError("Indexer did not return a valid Torznab response.", {
+        indexerId: config.id,
+        indexerName: config.name,
+        cause,
+      });
+    }
+
+    const error = parsed.error ?? parsed.caps?.error;
+    if (error) {
+      const description =
+        textOf((error as { "@_description"?: unknown })["@_description"]) ??
+        "Torznab indexer rejected the request.";
+      throw new IndexerError(description, {
+        indexerId: config.id,
+        indexerName: config.name,
+      });
+    }
+
+    if (!parsed.caps) {
+      throw new IndexerError("Indexer response did not include Torznab capabilities.", {
+        indexerId: config.id,
+        indexerName: config.name,
+      });
+    }
+
+    return { ok: true, message: "Indexer responded to a capabilities check." };
   }
 
   private buildSearchUrl(config: IndexerConfig, params: TorrentSearchParams): URL {

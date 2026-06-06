@@ -1,3 +1,4 @@
+import { CardigannIndexerAdapter } from "@/lib/server/indexers/cardigann";
 import { TorznabIndexerAdapter } from "@/lib/server/indexers/torznab";
 import {
   IndexerError,
@@ -6,12 +7,12 @@ import {
 } from "@/lib/server/indexers/types";
 
 /**
- * Maps each {@link IndexerType} to its adapter. Definition-based
- * (Cardigann-style) indexers will register their adapter here once added; the
- * search layer always resolves adapters through {@link getIndexerAdapter} and
- * never instantiates them directly.
+ * Maps each {@link IndexerType} to its adapter. The search layer always
+ * resolves adapters through {@link getIndexerAdapter} and never instantiates
+ * them directly.
  */
 const adapters: Record<IndexerType, IndexerAdapter> = {
+  cardigann: new CardigannIndexerAdapter(),
   torznab: new TorznabIndexerAdapter(),
 };
 

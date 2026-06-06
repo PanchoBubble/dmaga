@@ -16,4 +16,7 @@ COPY . .
 
 EXPOSE 3000
 
+# Apply pending DB migrations before starting the app command (idempotent).
+# Invoked via `sh` so it works even when the bind-mounted copy lacks +x.
+ENTRYPOINT ["sh", "/app/scripts/docker-entrypoint.sh"]
 CMD ["pnpm", "dev"]

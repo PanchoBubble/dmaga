@@ -1,35 +1,31 @@
-import { Plus, TestTube2 } from "lucide-react";
+import Link from "next/link";
+import { ListFilter, TestTube2 } from "lucide-react";
 
 import { RealDebridAuthPanel } from "@/components/real-debrid-auth-panel";
+import { RestartAppCard } from "@/components/restart-app-card";
 import { Button } from "@/components/ui/button";
 
-export default function SettingsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SettingsPage() {
   return (
     <div className="space-y-6">
       <RealDebridAuthPanel initialStatus={{ linked: false }} />
 
       <section className="border-2 border-foreground bg-card p-4 shadow-line">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black">Indexers</h1>
+            <h1 className="text-2xl font-black">Settings</h1>
             <p className="mt-1 text-sm font-semibold text-muted-foreground">
-              Add Torznab-compatible indexers first, then enable FlareSolverr per
-              indexer.
+              Configure Real-Debrid, indexers, and local runtime services.
             </p>
           </div>
-          <Button>
-            <Plus className="size-4" />
-            Add
+          <Button asChild>
+            <Link href="/settings/indexers">
+              <ListFilter className="size-4" />
+              Indexers
+            </Link>
           </Button>
-        </div>
-
-        <div className="mt-6 grid gap-3">
-          <div className="border-2 border-dashed border-foreground bg-background p-6">
-            <p className="font-black">No indexers configured</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              The first adapter will target generic Torznab/Newznab-style search.
-            </p>
-          </div>
         </div>
       </section>
 
@@ -50,6 +46,8 @@ export default function SettingsPage() {
           ))}
         </div>
       </section>
+
+      <RestartAppCard />
     </div>
   );
 }

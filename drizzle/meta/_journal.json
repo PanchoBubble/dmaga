@@ -15,6 +15,20 @@
       "when": 1780748402503,
       "tag": "0001_sparkling_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780755065499,
+      "tag": "0002_wandering_talos",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780760295116,
+      "tag": "0003_aberrant_joshua_kane",
+      "breakpoints": true
     }
   ]
 }

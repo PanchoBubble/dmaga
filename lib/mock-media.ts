@@ -3,6 +3,7 @@ export const mediaCategories = [
   { id: "movies", label: "Movies" },
   { id: "tv", label: "TV" },
   { id: "anime", label: "Anime" },
+  { id: "games", label: "Games" },
 ] as const;
 
 export type MediaCategory = (typeof mediaCategories)[number]["id"];
