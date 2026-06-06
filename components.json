@@ -18,6 +18,6 @@
     "hooks": "@/hooks"
   },
   "registries": {
-    "kibo-ui": "https://www.kibo-ui.com/r/{name}.json"
+    "@retroui": "https://retroui.dev/r/{name}.json"
   }
 }

@@ -5,7 +5,7 @@ LAN-first Real-Debrid torrent manager with configurable indexers, FlareSolverr s
 ## Stack
 
 - Next.js, React, TypeScript
-- Tailwind CSS, shadcn/ui foundations, Kibo UI registry components
+- Tailwind CSS, shadcn/ui foundations, RetroUI registry components
 - Zustand and Framer Motion
 - Postgres, Redis, FlareSolverr
 - Docker Compose for local-network runtime

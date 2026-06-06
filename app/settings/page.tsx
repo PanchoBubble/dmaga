@@ -10,7 +10,8 @@ export default function SettingsPage() {
           <div>
             <h1 className="text-2xl font-black">Indexers</h1>
             <p className="mt-1 text-sm font-semibold text-muted-foreground">
-              Add Torznab-compatible indexers first, then enable FlareSolverr per indexer.
+              Add Torznab-compatible indexers first, then enable FlareSolverr per
+              indexer.
             </p>
           </div>
           <Button>

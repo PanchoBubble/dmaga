@@ -1,4 +1,4 @@
-import { Download, Search, Settings } from "lucide-react";
+import { Download, Search, Settings, Star } from "lucide-react";
 
 export const navigationItems = [
   {
@@ -10,6 +10,11 @@ export const navigationItems = [
     href: "/added",
     label: "Added",
     icon: Download,
+  },
+  {
+    href: "/saved",
+    label: "Saved",
+    icon: Star,
   },
   {
     href: "/settings",
