@@ -65,6 +65,17 @@ export function MediaCard({ item, index = 0 }: MediaCardProps) {
           <div>Age: {item.age}</div>
         </div>
 
+        <div className="mt-3 flex flex-wrap gap-2">
+          {item.labels.map((label) => (
+            <span
+              className="border-2 border-foreground bg-background px-2 py-1 text-xs font-black"
+              key={label}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+
         {isReady ? (
           <div className="mt-4 inline-flex w-fit items-center gap-2 border-2 border-foreground bg-secondary px-2 py-1 text-xs font-black">
             <CheckCircle2 className="size-4" />

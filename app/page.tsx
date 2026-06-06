@@ -5,11 +5,20 @@ import { Search } from "lucide-react";
 import { MediaCard } from "@/components/media-card";
 import { Button } from "@/components/ui/button";
 import { useSearchStore } from "@/hooks/use-search-store";
-import { mockMediaItems } from "@/lib/mock-media";
+import { mediaCategories, mockMediaItems } from "@/lib/mock-media";
+import { cn } from "@/lib/utils";
 
 export default function SearchPage() {
   const query = useSearchStore((state) => state.query);
+  const category = useSearchStore((state) => state.category);
   const setQuery = useSearchStore((state) => state.setQuery);
+  const setCategory = useSearchStore((state) => state.setCategory);
+  const filteredItems = mockMediaItems.filter((item) => {
+    const matchesCategory = category === "all" || item.category === category;
+    const matchesQuery = item.title.toLowerCase().includes(query.toLowerCase());
+
+    return matchesCategory && matchesQuery;
+  });
 
   return (
     <div className="space-y-6">
@@ -26,13 +35,39 @@ export default function SearchPage() {
           </div>
           <Button className="h-12">Search</Button>
         </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {mediaCategories.map((option) => (
+            <Button
+              className={cn(
+                "h-9 px-3 text-xs",
+                category === option.id && "bg-secondary text-secondary-foreground",
+              )}
+              key={option.id}
+              onClick={() => setCategory(option.id)}
+              size="sm"
+              variant={category === option.id ? "secondary" : "outline"}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        {mockMediaItems.map((item, index) => (
-          <MediaCard index={index} item={item} key={item.id} />
-        ))}
-      </section>
+      {filteredItems.length ? (
+        <section className="grid gap-4 lg:grid-cols-2">
+          {filteredItems.map((item, index) => (
+            <MediaCard index={index} item={item} key={item.id} />
+          ))}
+        </section>
+      ) : (
+        <div className="border-2 border-dashed border-foreground bg-background p-8 text-center">
+          <p className="text-lg font-black">No matches</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Try another category or search term.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
