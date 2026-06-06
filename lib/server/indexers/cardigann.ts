@@ -242,6 +242,15 @@ const definitions: Record<string, CardigannDefinition> = {
       return normalizeTorrentDownloads(config, html, params.limit);
     },
   },
+  "prowlarr-public-torrentdownload": {
+    key: "prowlarr-public-torrentdownload",
+    search: async (config, params) => {
+      const url = new URL("/search", config.baseUrl);
+      url.searchParams.set("q", params.query);
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeTorrentDownload(config, html, params.limit);
+    },
+  },
   "prowlarr-public-torrentgalaxyclone": {
     key: "prowlarr-public-torrentgalaxyclone",
     search: async (config, params) => {
@@ -714,6 +723,76 @@ async function normalizeTorrentDownloads(
   return results.filter((result) => result.magnetUrl || result.infoHash);
 }
 
+/**
+ * TorrentDownload (`torrentdownload.info`) uses `table2` rows with `tt-name`
+ * detail links shaped like `/<infohash>/<slug>`. The detail page carries a
+ * magnet, but the listing URL itself gives us enough to return a usable magnet
+ * without fetching every detail page.
+ */
+async function normalizeTorrentDownload(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): Promise<TorrentSearchResult[]> {
+  const seen = new Set<string>();
+  const rows: Array<{ path: string; title: string; cells: string[] }> = [];
+  for (const row of [...html.matchAll(/<tr\b[\s\S]*?<\/tr>/gi)].map(
+    (match) => match[0],
+  )) {
+    if (
+      !/class=["'][^"']*tt-name[^"']*["']/i.test(row) ||
+      !/class=["'][^"']*smallish[^"']*["']/i.test(row)
+    ) {
+      continue;
+    }
+    const link = row.match(
+      /<div\b[^>]*class=["'][^"']*tt-name[^"']*["'][^>]*>[\s\S]*?<a\b[^>]*href=["'](\/[^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/i,
+    );
+    const path = htmlDecode(link?.[1]);
+    if (!path || seen.has(path)) {
+      continue;
+    }
+    seen.add(path);
+    rows.push({
+      path,
+      title: cleanText(link?.[2]) ?? "Untitled",
+      cells: tableCells(row),
+    });
+    if (rows.length >= (limit ?? 20)) {
+      break;
+    }
+  }
+
+  const results = await Promise.all(
+    rows.map(async ({ path, title, cells }) => {
+      const detailUrl = new URL(path, config.baseUrl).toString();
+      const listedInfoHash = infoHashFromPath(path);
+      const resolved = listedInfoHash
+        ? {
+            magnet: magnetFromInfoHash(listedInfoHash, title),
+            infoHash: listedInfoHash,
+          }
+        : await resolveMagnetFromDetail(config, detailUrl, title);
+
+      return {
+        id: `${config.id}:${resolved.infoHash ?? path}`,
+        title,
+        sizeBytes: parseSize(cells[2]),
+        seeders: parseCount(cells[3]),
+        leechers: parseCount(cells[4]),
+        publishedAt: fuzzyAgoToIso(cells[1]),
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: resolved.magnet,
+        infoHash: resolved.infoHash,
+        sourceUrl: detailUrl,
+      };
+    }),
+  );
+
+  return results.filter((result) => result.magnetUrl || result.infoHash);
+}
+
 /** Pulls every magnet URI out of an HTML blob, decoding entity-escaped `&`. */
 function extractMagnets(html: string): string[] {
   return [...html.matchAll(/magnet:\?xt=urn:btih:[^\s"'<>]+/gi)].map(
@@ -819,6 +898,10 @@ function parseSize(value: string | undefined): number | undefined {
   return Number.isFinite(amount) ? Math.round(amount * multiplier) : undefined;
 }
 
+function parseCount(value: string | undefined): number | undefined {
+  return toNumber(value?.replace(/,/g, ""));
+}
+
 function deriveLeechers(
   seeders: number | undefined,
   peers: number | undefined,
@@ -887,6 +970,10 @@ function htmlDecode(value: string | undefined): string | undefined {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&nbsp;/gi, " ");
+}
+
+function infoHashFromPath(path: string): string | undefined {
+  return normalizeHash(path.match(/\/([a-f0-9]{40})(?:\/|$)/i)?.[1]);
 }
 
 function slugifySearch(query: string): string {
