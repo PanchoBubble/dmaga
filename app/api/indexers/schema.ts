@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /** Shared request validation for the indexer settings endpoints. */
 
-export const indexerTypeSchema = z.enum(["torznab", "cardigann"]);
+export const indexerTypeSchema = z.enum(["torznab", "cardigann", "torrentio"]);
 export const fetchModeSchema = z.enum(["direct", "flaresolverr"]);
 
 const baseFields = {

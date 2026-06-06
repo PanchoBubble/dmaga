@@ -1,13 +1,22 @@
 "use client";
 
-import { AlertTriangle, Loader2, Search, SettingsIcon, Square } from "lucide-react";
+import {
+  AlertTriangle,
+  Loader2,
+  Search,
+  SettingsIcon,
+  SlidersHorizontal,
+  Square,
+} from "lucide-react";
 import Link from "next/link";
-import type { FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
+import { IndexerFilterModal } from "@/components/indexer-filter-modal";
 import { TorrentResultCard } from "@/components/torrent-result-card";
 import { Button } from "@/components/ui/button";
 import { useSearchStore } from "@/hooks/use-search-store";
 import { mediaCategories } from "@/lib/mock-media";
+import { sortOptions, type SortKey } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
 export default function SearchPage() {
@@ -21,12 +30,32 @@ export default function SearchPage() {
   const indexersCompleted = useSearchStore((state) => state.indexersCompleted);
   const stopped = useSearchStore((state) => state.stopped);
   const error = useSearchStore((state) => state.error);
+  const indexerFilter = useSearchStore((state) => state.indexerFilter);
+  const availableIndexers = useSearchStore((state) => state.availableIndexers);
+  const selectedIndexerIds = useSearchStore((state) => state.selectedIndexerIds);
   const setQuery = useSearchStore((state) => state.setQuery);
   const setCategory = useSearchStore((state) => state.setCategory);
+  const setIndexerFilter = useSearchStore((state) => state.setIndexerFilter);
+  const loadIndexers = useSearchStore((state) => state.loadIndexers);
+  const hydrateSelection = useSearchStore((state) => state.hydrateSelection);
+  const setSelectedIndexerIds = useSearchStore((state) => state.setSelectedIndexerIds);
   const runSearch = useSearchStore((state) => state.runSearch);
   const stopSearch = useSearchStore((state) => state.stopSearch);
 
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  // Restore the persisted indexer scope after mount (kept out of the store
+  // initializer to avoid an SSR hydration mismatch), then load the enabled
+  // indexer list so the scope modal has something to show.
+  useEffect(() => {
+    hydrateSelection();
+    void loadIndexers();
+  }, [hydrateSelection, loadIndexers]);
+
   const isLoading = status === "loading";
+  const totalIndexers = availableIndexers.length;
+  const selectedCount = selectedIndexerIds === null ? totalIndexers : selectedIndexerIds.length;
+  const allIndexersSelected = selectedIndexerIds === null;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,10 +79,19 @@ export default function SearchPage() {
               the user. Otherwise it submits — we don't gate on empty input
               because iOS Safari leaves the button stuck-disabled with the
               keyboard focused, and runSearch() already no-ops on an empty query. */}
+          {/* Distinct keys force React to mount a fresh element when the action
+              flips, instead of reusing the same <button> and mutating its
+              `type`. Reusing it let a single mobile tap on Stop re-submit the
+              form (button→submit in place), which restarted the search and
+              snapped the UI back to the loading state. */}
           {isLoading ? (
             <Button
               className="h-12"
-              onClick={() => stopSearch()}
+              key="stop"
+              onClick={(event) => {
+                event.preventDefault();
+                stopSearch();
+              }}
               type="button"
               variant="outline"
             >
@@ -63,13 +101,13 @@ export default function SearchPage() {
                 : "Stop"}
             </Button>
           ) : (
-            <Button className="h-12" type="submit">
+            <Button className="h-12" key="search" type="submit">
               Search
             </Button>
           )}
         </form>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {mediaCategories.map((option) => (
             <Button
               aria-pressed={category === option.id}
@@ -83,16 +121,46 @@ export default function SearchPage() {
               {option.label}
             </Button>
           ))}
+
+          {totalIndexers > 0 ? (
+            <Button
+              className={cn("ml-auto h-9 px-3 text-xs", !allIndexersSelected && "font-black")}
+              onClick={() => setFilterOpen(true)}
+              size="sm"
+              type="button"
+              variant={allIndexersSelected ? "outline" : "secondary"}
+            >
+              <SlidersHorizontal className="size-4" />
+              {`Indexers · ${selectedCount}/${totalIndexers}`}
+            </Button>
+          ) : null}
         </div>
+
+        {selectedIndexerIds?.length === 0 ? (
+          <p className="mt-2 text-xs font-bold text-destructive">
+            No indexers selected — pick at least one to search.
+          </p>
+        ) : null}
       </section>
+
+      {filterOpen ? (
+        <IndexerFilterModal
+          indexers={availableIndexers}
+          onApply={setSelectedIndexerIds}
+          onClose={() => setFilterOpen(false)}
+          selectedIds={selectedIndexerIds}
+        />
+      ) : null}
 
       <SearchBody
         error={error}
         indexerErrors={indexerErrors}
+        indexerFilter={indexerFilter}
         indexersCompleted={indexersCompleted}
         indexersSearched={indexersSearched}
         lastQuery={lastQuery}
         onRetry={() => void runSearch()}
+        onSelectIndexer={setIndexerFilter}
         results={results}
         status={status}
         stopped={stopped}
@@ -105,25 +173,32 @@ type SearchBodyProps = {
   status: ReturnType<typeof useSearchStore.getState>["status"];
   results: ReturnType<typeof useSearchStore.getState>["results"];
   indexerErrors: ReturnType<typeof useSearchStore.getState>["indexerErrors"];
+  indexerFilter: string | null;
   indexersSearched: number;
   indexersCompleted: number;
   lastQuery: string;
   error: string | null;
   stopped: boolean;
   onRetry: () => void;
+  onSelectIndexer: (indexerName: string | null) => void;
 };
 
 function SearchBody({
   status,
   results,
   indexerErrors,
+  indexerFilter,
   indexersSearched,
   indexersCompleted,
   lastQuery,
   error,
   stopped,
   onRetry,
+  onSelectIndexer,
 }: SearchBodyProps) {
+  const sortKey = useSearchStore((state) => state.sortKey);
+  const setSortKey = useSearchStore((state) => state.setSortKey);
+
   if (status === "idle") {
     return (
       <Panel title="Search across your indexers">
@@ -149,8 +224,10 @@ function SearchBody({
 
   const isLoading = status === "loading";
 
-  // No indexers enabled: only meaningful once a completed search reports zero.
-  if (!isLoading && indexersSearched === 0) {
+  // No indexers enabled: only meaningful once a search *completed* on its own
+  // and reported zero. A user-stopped search may abort before the `start` event
+  // lands (indexersSearched still 0), so don't mistake that for a setup gap.
+  if (!isLoading && !stopped && indexersSearched === 0) {
     return (
       <Panel title="No indexers enabled">
         <p className="mt-2 text-sm text-muted-foreground">
@@ -166,6 +243,20 @@ function SearchBody({
     );
   }
 
+  // Indexers that actually returned results, with per-provider counts, so the
+  // filter only ever offers buckets that contain something. An active filter
+  // that no longer matches (e.g. mid-stream) simply yields an empty grid.
+  const indexerCounts = new Map<string, number>();
+  for (const result of results) {
+    indexerCounts.set(result.indexerName, (indexerCounts.get(result.indexerName) ?? 0) + 1);
+  }
+  const providers = [...indexerCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const activeFilter =
+    indexerFilter && indexerCounts.has(indexerFilter) ? indexerFilter : null;
+  const visibleResults = activeFilter
+    ? results.filter((result) => result.indexerName === activeFilter)
+    : results;
+
   return (
     <div className="space-y-4">
       {isLoading ? (
@@ -173,6 +264,15 @@ function SearchBody({
           completed={indexersCompleted}
           total={indexersSearched}
           loaded={results.length}
+        />
+      ) : null}
+
+      {providers.length > 1 ? (
+        <IndexerFilter
+          active={activeFilter}
+          onSelect={onSelectIndexer}
+          providers={providers}
+          total={results.length}
         />
       ) : null}
 
@@ -187,11 +287,14 @@ function SearchBody({
       {indexerErrors.length ? <PartialFailureNotice errors={indexerErrors} /> : null}
 
       {results.length ? (
-        <section className="grid gap-4 lg:grid-cols-2">
-          {results.map((result, index) => (
-            <TorrentResultCard index={index} key={result.id} result={result} />
-          ))}
-        </section>
+        <>
+          <SortControl active={sortKey} onSelect={setSortKey} />
+          <section className="grid gap-4 lg:grid-cols-2">
+            {visibleResults.map((result, index) => (
+              <TorrentResultCard index={index} key={result.id} result={result} />
+            ))}
+          </section>
+        </>
       ) : isLoading ? (
         <section className="grid gap-4 lg:grid-cols-2" aria-busy="true">
           {Array.from({ length: 4 }).map((_, index) => (
@@ -207,6 +310,77 @@ function SearchBody({
           </p>
         </Panel>
       )}
+    </div>
+  );
+}
+
+function IndexerFilter({
+  providers,
+  active,
+  total,
+  onSelect,
+}: {
+  providers: [name: string, count: number][];
+  active: string | null;
+  total: number;
+  onSelect: (indexerName: string | null) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-black uppercase text-muted-foreground">
+        Indexer
+      </span>
+      <Button
+        aria-pressed={active === null}
+        className={cn("h-8 px-2.5 text-xs", active === null && "font-black")}
+        onClick={() => onSelect(null)}
+        size="sm"
+        type="button"
+        variant={active === null ? "secondary" : "outline"}
+      >
+        {`All · ${total}`}
+      </Button>
+      {providers.map(([name, count]) => (
+        <Button
+          aria-pressed={active === name}
+          className={cn("h-8 max-w-full px-2.5 text-xs", active === name && "font-black")}
+          key={name}
+          onClick={() => onSelect(name)}
+          size="sm"
+          type="button"
+          variant={active === name ? "secondary" : "outline"}
+        >
+          <span className="truncate">{name}</span>
+          <span className="tabular-nums opacity-70">{count}</span>
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+function SortControl({
+  active,
+  onSelect,
+}: {
+  active: SortKey;
+  onSelect: (key: SortKey) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-black uppercase text-muted-foreground">Sort</span>
+      {sortOptions.map((option) => (
+        <Button
+          aria-pressed={active === option.key}
+          className={cn("h-8 px-2.5 text-xs", active === option.key && "font-black")}
+          key={option.key}
+          onClick={() => onSelect(option.key)}
+          size="sm"
+          type="button"
+          variant={active === option.key ? "secondary" : "outline"}
+        >
+          {option.label}
+        </Button>
+      ))}
     </div>
   );
 }

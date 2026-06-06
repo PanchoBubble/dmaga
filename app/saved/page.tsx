@@ -1,10 +1,21 @@
 import { Star } from "lucide-react";
 
-import { MediaCard } from "@/components/media-card";
-import { mockMediaItems } from "@/lib/mock-media";
+import { TorrentResultCard } from "@/components/torrent-result-card";
+import { listSavedItems } from "@/lib/server/saved-items";
 
-export default function SavedPage() {
-  const savedItems = mockMediaItems.filter((item) => item.saved);
+// Saved state changes as the user stars/unstars results, so always read fresh.
+export const dynamic = "force-dynamic";
+
+export default async function SavedPage() {
+  let savedItems: Awaited<ReturnType<typeof listSavedItems>> = [];
+  let dbReachable = true;
+  try {
+    savedItems = await listSavedItems();
+  } catch {
+    // DB unreachable (e.g. Postgres down or first boot) — degrade gracefully
+    // instead of crashing the page; surface a distinct state below.
+    dbReachable = false;
+  }
 
   return (
     <div className="space-y-4">
@@ -20,10 +31,18 @@ export default function SavedPage() {
         </div>
       </section>
 
-      {savedItems.length ? (
+      {!dbReachable ? (
+        <div className="border-2 border-dashed border-foreground bg-background p-8 text-center">
+          <p className="text-lg font-black">Can&apos;t reach the database</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Saved torrents are unavailable right now. Check that Postgres is running,
+            then refresh.
+          </p>
+        </div>
+      ) : savedItems.length ? (
         <section className="grid gap-4 lg:grid-cols-2">
           {savedItems.map((item, index) => (
-            <MediaCard index={index} item={item} key={item.id} />
+            <TorrentResultCard index={index} key={item.id} result={item} />
           ))}
         </section>
       ) : (

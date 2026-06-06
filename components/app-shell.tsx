@@ -10,17 +10,20 @@ import { navigationItems } from "@/lib/navigation";
 export function AppShell({
   children,
   addedCount = 0,
+  savedCount = 0,
 }: {
   children: React.ReactNode;
   /** Number of tracked Real-Debrid items, badged on the Added tab. */
   addedCount?: number;
+  /** Number of starred torrents, badged on the Saved tab. */
+  savedCount?: number;
 }) {
   const pathname = usePathname();
 
   // Counts surfaced as small badges on their matching nav tabs.
   const navCounts: Record<string, number> = {
     "/added": addedCount,
-    "/saved": 1,
+    "/saved": savedCount,
   };
 
   return (

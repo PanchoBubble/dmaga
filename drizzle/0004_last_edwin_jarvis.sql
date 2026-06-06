@@ -1,0 +1,1 @@
+ALTER TYPE "public"."indexer_type" ADD VALUE 'torrentio';

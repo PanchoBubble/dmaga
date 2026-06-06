@@ -34,6 +34,7 @@
     "redis": "^6.0.0",
     "tailwind-merge": "latest",
     "tailwindcss-animate": "latest",
+    "undici": "^7",
     "zod": "latest",
     "zustand": "latest"
   },

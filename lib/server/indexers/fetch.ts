@@ -1,12 +1,35 @@
+import { fetch as undiciFetch, ProxyAgent, type Dispatcher } from "undici";
+
 import { env } from "@/lib/server/env";
 import { IndexerError, type IndexerConfig } from "@/lib/server/indexers/types";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/**
+ * Lazily-built dispatcher that routes direct indexer fetches through
+ * {@link env.INDEXER_PROXY_URL} when configured (the VPN-egress proxy in the
+ * Compose stack). Reused across requests so connections pool. `undefined` when
+ * no proxy is set — direct egress.
+ */
+let indexerProxyAgent: ProxyAgent | undefined;
+function indexerDispatcher(): Dispatcher | undefined {
+  if (!env.INDEXER_PROXY_URL) {
+    return undefined;
+  }
+  indexerProxyAgent ??= new ProxyAgent(env.INDEXER_PROXY_URL);
+  return indexerProxyAgent;
+}
+
 type FetchOptions = {
   timeoutMs?: number;
   /** Cancels the request when the caller (e.g. a streaming search) aborts. */
   signal?: AbortSignal;
+  /** HTTP method; defaults to GET. Only `direct` fetch mode supports a body. */
+  method?: "GET" | "POST";
+  /** Request body for POST (e.g. a JSON-API indexer like Knaben). */
+  body?: string;
+  /** Content type for {@link body}; defaults to `application/json`. */
+  contentType?: string;
 };
 
 /** Aborts when either the timeout fires or the caller's signal aborts. */
@@ -38,23 +61,31 @@ export async function fetchIndexerText(
 
   return config.fetchMode === "flaresolverr"
     ? fetchViaFlaresolverr(config, url, timeoutMs, options.signal)
-    : fetchDirect(config, url, timeoutMs, options.signal);
+    : fetchDirect(config, url, timeoutMs, options);
 }
 
 async function fetchDirect(
   config: IndexerConfig,
   url: string,
   timeoutMs: number,
-  callerSignal?: AbortSignal,
+  options: Pick<FetchOptions, "signal" | "method" | "body" | "contentType">,
 ): Promise<string> {
-  const { signal, clear } = withTimeout(timeoutMs, callerSignal);
+  const { signal, clear } = withTimeout(timeoutMs, options.signal);
 
   try {
-    const response = await fetch(url, {
+    // undici fetch (vs global fetch) so we can attach the VPN-egress proxy
+    // dispatcher; with no proxy configured it behaves like the global fetch.
+    const response = await undiciFetch(url, {
       signal,
+      method: options.method ?? "GET",
+      body: options.body,
+      dispatcher: indexerDispatcher(),
       headers: {
         Accept:
           "application/rss+xml, application/xml, text/xml, application/json, text/html",
+        ...(options.body
+          ? { "Content-Type": options.contentType ?? "application/json" }
+          : {}),
       },
     });
 

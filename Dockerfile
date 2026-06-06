@@ -10,7 +10,13 @@ RUN corepack enable
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+# Keep pnpm's content-addressable store in a build cache mount instead of the
+# image layer. Without this the ~750MB store is committed on top of
+# node_modules (a 1.56GB layer); with it the layer is just node_modules, and the
+# store is reused across rebuilds — smaller image, faster builds, less commit
+# scratch. PNPM_HOME=/pnpm, so the store lives at /pnpm/store.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile
 
 COPY . .
 

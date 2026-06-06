@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { debridItems, mediaItems } from "@/lib/db/schema";
+import { debridItems } from "@/lib/db/schema";
 import {
   type AddToDebridRequest,
   type AddToDebridResponse,
   type DebridItemStatus,
 } from "@/lib/debrid";
+import { resolveInfoHash, upsertMediaItem } from "@/lib/server/media-items";
 import {
   createAuthenticatedRealDebridClient,
   getLatestRealDebridAccount,
@@ -42,9 +43,7 @@ export class AddToDebridError extends Error {
 export async function addSearchResultToDebrid(
   input: AddToDebridRequest,
 ): Promise<AddToDebridResponse> {
-  const infoHash = normalizeInfoHash(
-    input.infoHash ?? parseInfoHashFromMagnet(input.magnetUrl),
-  );
+  const infoHash = resolveInfoHash(input);
   const magnet = input.magnetUrl ?? buildMagnetUri(infoHash, input.title);
 
   if (!magnet) {
@@ -134,39 +133,6 @@ async function selectFilesWhenReady(
   return torrent;
 }
 
-async function upsertMediaItem(input: AddToDebridRequest, infoHash: string | null) {
-  if (infoHash) {
-    const [existing] = await db
-      .select()
-      .from(mediaItems)
-      .where(eq(mediaItems.infoHash, infoHash))
-      .limit(1);
-
-    if (existing) {
-      return existing;
-    }
-  }
-
-  const [created] = await db
-    .insert(mediaItems)
-    .values({
-      title: input.title,
-      normalizedTitle: input.title.trim().toLowerCase(),
-      sizeBytes: input.sizeBytes ?? null,
-      seeders: input.seeders ?? null,
-      leechers: input.leechers ?? null,
-      publishedAt: input.publishedAt ? new Date(input.publishedAt) : null,
-      indexerId: input.indexerId ?? null,
-      indexerName: input.indexerName,
-      magnetUrl: input.magnetUrl ?? null,
-      infoHash,
-      sourceUrl: input.sourceUrl ?? null,
-    })
-    .returning();
-
-  return created;
-}
-
 type DebridItemRow = typeof debridItems.$inferSelect;
 
 async function findDebridItem(mediaItemId: string): Promise<DebridItemRow | undefined> {
@@ -245,17 +211,6 @@ function mapTorrentStatus(status: RealDebridTorrentStatus): DebridItemStatus {
     default:
       return "adding";
   }
-}
-
-const INFO_HASH_PATTERN = /xt=urn:btih:([0-9a-z]+)/i;
-
-/** Pulls the btih info hash out of a magnet URI, when present. */
-function parseInfoHashFromMagnet(magnet: string | undefined): string | undefined {
-  return magnet?.match(INFO_HASH_PATTERN)?.[1];
-}
-
-function normalizeInfoHash(infoHash: string | undefined): string | null {
-  return infoHash ? infoHash.trim().toLowerCase() : null;
 }
 
 /** Synthesizes a magnet URI for results that only carry an info hash. */

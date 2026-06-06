@@ -1,4 +1,5 @@
 import { CardigannIndexerAdapter } from "@/lib/server/indexers/cardigann";
+import { TorrentioIndexerAdapter } from "@/lib/server/indexers/torrentio";
 import { TorznabIndexerAdapter } from "@/lib/server/indexers/torznab";
 import {
   IndexerError,
@@ -14,6 +15,7 @@ import {
 const adapters: Record<IndexerType, IndexerAdapter> = {
   cardigann: new CardigannIndexerAdapter(),
   torznab: new TorznabIndexerAdapter(),
+  torrentio: new TorrentioIndexerAdapter(),
 };
 
 export function getIndexerAdapter(type: IndexerType): IndexerAdapter {

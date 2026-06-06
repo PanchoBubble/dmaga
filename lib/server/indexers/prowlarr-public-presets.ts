@@ -872,6 +872,18 @@ export const prowlarrPublicIndexerPresets = [
     requiresApiKey: false,
   },
   {
+    presetKey: "prowlarr-public-knaben",
+    name: "Knaben",
+    type: "cardigann",
+    baseUrl: "https://api.knaben.org/",
+    fetchMode: "direct",
+    enabled: false,
+    categories: [],
+    description:
+      "Knaben is a Public meta-search engine aggregating many torrent sites via a JSON API",
+    requiresApiKey: false,
+  },
+  {
     presetKey: "prowlarr-public-limetorrents",
     name: "LimeTorrents",
     type: "cardigann",
@@ -1582,6 +1594,18 @@ export const prowlarrPublicIndexerPresets = [
     requiresApiKey: false,
   },
   {
+    presetKey: "prowlarr-public-solidtorrents",
+    name: "Solid Torrents",
+    type: "cardigann",
+    baseUrl: "https://solidtorrents.to/",
+    fetchMode: "direct",
+    enabled: false,
+    categories: [],
+    description:
+      "Solid Torrents is a Public DHT meta-search engine with a JSON API for MOVIES / TV / GENERAL",
+    requiresApiKey: false,
+  },
+  {
     presetKey: "prowlarr-public-thepiratebay",
     name: "The Pirate Bay",
     type: "cardigann",
@@ -1646,6 +1670,18 @@ export const prowlarrPublicIndexerPresets = [
     ],
     description:
       "The Pirate Bay (TPB) is the galaxy’s most resilient Public BitTorrent site",
+    requiresApiKey: false,
+  },
+  {
+    presetKey: "prowlarr-public-therarbg",
+    name: "TheRARBG",
+    type: "cardigann",
+    baseUrl: "https://therarbg.com/",
+    fetchMode: "direct",
+    enabled: false,
+    categories: [],
+    description:
+      "TheRARBG is a Public RARBG-successor torrent index for MOVIES / TV / GENERAL",
     requiresApiKey: false,
   },
   {

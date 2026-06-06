@@ -6,17 +6,22 @@ import {
   CheckCircle2,
   Download,
   Loader2,
-  Plus,
+  Magnet,
   Star,
+  Upload,
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
+import { TorrentDetailsModal } from "@/components/torrent-details-modal";
 import { Button } from "@/components/ui/button";
 import { entryKey, useDebridStore } from "@/hooks/use-debrid-store";
+import { useSavedStore } from "@/hooks/use-saved-store";
 import {
   formatBytes,
   formatRelativeAge,
+  magnetLinkFor,
   type DebridAvailability,
   type SearchResultDto,
 } from "@/lib/search";
@@ -45,14 +50,22 @@ const availabilityBadge: Record<
 
 export function TorrentResultCard({ result, index = 0 }: TorrentResultCardProps) {
   const router = useRouter();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const entry = useDebridStore((state) => state.entries[entryKey(result)]);
   const addToDebrid = useDebridStore((state) => state.addToDebrid);
+  const savedEntry = useSavedStore((state) => state.entries[entryKey(result)]);
+  const toggleSaved = useSavedStore((state) => state.toggleSaved);
+
+  // The store's optimistic state wins over the search-time snapshot.
+  const isSaved = savedEntry?.saved ?? result.saved ?? false;
+  const isSavePending = savedEntry?.pending ?? false;
 
   // The just-added state (from the store) wins over the search-time snapshot.
   const availability: DebridAvailability = entry?.availability ?? result.debridState;
   const isAdding = entry?.status === "adding";
   const isReady = availability === "ready";
-  const canAdd = Boolean(result.magnetUrl || result.infoHash);
+  const magnetHref = magnetLinkFor(result);
+  const canAdd = Boolean(magnetHref);
 
   const badge =
     availability === "downloading" || availability === "saved"
@@ -67,6 +80,12 @@ export function TorrentResultCard({ result, index = 0 }: TorrentResultCardProps)
     }
   }
 
+  async function handleToggleSaved() {
+    await toggleSaved(result, isSaved);
+    // Refresh server components so the Saved page + nav badge stay in sync.
+    router.refresh();
+  }
+
   const stats = [
     { label: "Size", value: formatBytes(result.sizeBytes) },
     { label: "Seeds", value: formatCount(result.seeders) },
@@ -75,94 +94,144 @@ export function TorrentResultCard({ result, index = 0 }: TorrentResultCardProps)
   ];
 
   return (
+    <>
     <motion.article
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col border-2 border-foreground bg-card p-3 shadow-line sm:p-4"
+      aria-label={`View details for ${result.title}`}
+      className="flex h-full min-w-0 cursor-pointer flex-col border-2 border-foreground bg-card p-3 shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       initial={{ opacity: 0, y: 8 }}
+      onClick={() => setDetailsOpen(true)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setDetailsOpen(true);
+        }
+      }}
+      role="button"
+      tabIndex={0}
       transition={{ delay: Math.min(index, 8) * 0.05 }}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-xs font-bold uppercase text-muted-foreground">
-            <Users className="size-3.5" />
-            {result.indexerName}
-          </p>
-          <h2 className="mt-2 break-words text-lg font-black leading-tight sm:text-xl">
-            {result.title}
-          </h2>
-        </div>
-        <Button aria-label="Save torrent" size="icon" variant="outline">
-          <Star className="size-5" />
-        </Button>
-      </div>
-
-      <dl className="mt-3 grid grid-cols-2 gap-2 text-sm font-semibold sm:mt-4 sm:grid-cols-4">
-        {stats.map((stat) => (
-          <div
-            className="border-2 border-foreground bg-background px-2 py-1"
-            key={stat.label}
-          >
-            <dt className="text-[10px] uppercase text-muted-foreground">
-              {stat.label}
-            </dt>
-            <dd className="tabular-nums">{stat.value}</dd>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase text-muted-foreground">
+              <Users className="size-3 shrink-0" />
+              <span className="truncate">{result.indexerName}</span>
+            </p>
+            <h2 className="mt-1 line-clamp-2 break-words text-base font-black leading-tight sm:text-lg">
+              {result.title}
+            </h2>
           </div>
-        ))}
-      </dl>
-
-      {badge ? (
-        <div
-          className={cn(
-            "mt-3 inline-flex w-fit items-center gap-2 border-2 border-foreground px-2 py-1 text-xs font-black",
-            badge.className,
-          )}
-        >
-          <badge.icon
-            className={cn("size-4", availability === "downloading" && "animate-spin")}
-          />
-          {badge.label}
-          {availability === "downloading" && entry && entry.progress > 0
-            ? ` · ${entry.progress}%`
-            : null}
-        </div>
-      ) : null}
-
-      {entry?.status === "error" ? (
-        <p className="mt-3 border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive">
-          {entry.error ?? "Failed to add to Real-Debrid."}
-        </p>
-      ) : null}
-
-      <div className="mt-auto flex flex-wrap justify-end gap-2 pt-4">
-        {result.sourceUrl ? (
-          <Button asChild className="px-3" variant="outline">
-            <a href={result.sourceUrl} rel="noreferrer" target="_blank">
-              Details
-            </a>
-          </Button>
-        ) : null}
-        {isReady ? (
-          <Button>
-            <Download className="size-4" />
-            Download
-          </Button>
-        ) : (
-          <Button disabled={!canAdd || isAdding} onClick={() => void handleAdd()}>
-            {isAdding ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                Adding
-              </>
+          <Button
+            aria-label={isSaved ? "Remove from saved" : "Save torrent"}
+            aria-pressed={isSaved}
+            className="size-9 shrink-0"
+            disabled={isSavePending}
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleToggleSaved();
+            }}
+            size="icon"
+            variant="outline"
+          >
+            {isSavePending ? (
+              <Loader2 className="size-4 animate-spin" />
             ) : (
-              <>
-                <Plus className="size-4" />
-                {entry?.status === "error" ? "Retry" : "Add"}
-              </>
+              <Star
+                className={cn("size-4", isSaved && "fill-yellow-400 text-yellow-400")}
+              />
             )}
           </Button>
-        )}
+        </div>
+
+        <dl className="mt-2.5 grid grid-cols-2 gap-1.5 text-sm font-semibold sm:grid-cols-4">
+          {stats.map((stat) => (
+            <div
+              className="min-w-0 border-2 border-foreground bg-background px-2 py-1"
+              key={stat.label}
+            >
+              <dt className="text-[10px] uppercase text-muted-foreground">
+                {stat.label}
+              </dt>
+              <dd className="truncate tabular-nums">{stat.value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        {badge ? (
+          <div
+            className={cn(
+              "mt-2.5 inline-flex w-fit max-w-full items-center gap-2 border-2 border-foreground px-2 py-0.5 text-xs font-black",
+              badge.className,
+            )}
+          >
+            <badge.icon
+              className={cn(
+                "size-4 shrink-0",
+                availability === "downloading" && "animate-spin",
+              )}
+            />
+            {badge.label}
+            {availability === "downloading" && entry && entry.progress > 0
+              ? ` · ${entry.progress}%`
+              : null}
+          </div>
+        ) : null}
+
+        {entry?.status === "error" ? (
+          <p className="mt-2.5 break-words border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive">
+            {entry.error ?? "Failed to add to Real-Debrid."}
+          </p>
+        ) : null}
+
+        <div className="mt-auto flex flex-wrap justify-end gap-2 pt-3">
+          {magnetHref ? (
+            <Button
+              asChild
+              onClick={(event) => event.stopPropagation()}
+              size="sm"
+              variant="outline"
+            >
+              <a href={magnetHref}>
+                <Magnet className="size-4" />
+                Magnet
+              </a>
+            </Button>
+          ) : null}
+          {isReady ? (
+            <Button onClick={(event) => event.stopPropagation()} size="sm">
+              <Download className="size-4" />
+              Download
+            </Button>
+          ) : (
+            <Button
+              disabled={!canAdd || isAdding}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleAdd();
+              }}
+              size="sm"
+            >
+              {isAdding ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  RD
+                </>
+              ) : (
+                <>
+                  <Upload className="size-4" />
+                  {entry?.status === "error" ? "Retry" : "RD"}
+                </>
+              )}
+            </Button>
+          )}
+        </div>
       </div>
     </motion.article>
+    {detailsOpen ? (
+      <TorrentDetailsModal onClose={() => setDetailsOpen(false)} result={result} />
+    ) : null}
+    </>
   );
 }
 

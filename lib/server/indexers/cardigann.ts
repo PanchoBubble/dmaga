@@ -2,6 +2,11 @@ import { XMLParser } from "fast-xml-parser";
 
 import { fetchIndexerText } from "@/lib/server/indexers/fetch";
 import {
+  infoHashFromMagnet,
+  magnetFromInfoHash,
+  normalizeHash,
+} from "@/lib/server/indexers/info-hash";
+import {
   IndexerError,
   type IndexerAdapter,
   type IndexerConfig,
@@ -73,6 +78,49 @@ type PirateBayItem = {
   seeders?: string;
   size?: string;
   added?: string;
+};
+
+type KnabenResponse = {
+  hits?: Array<{
+    title?: string;
+    hash?: string;
+    magnetUrl?: string;
+    bytes?: number;
+    seeders?: number;
+    peers?: number;
+    date?: string;
+    details?: string;
+  }>;
+};
+
+type SolidTorrentsResponse = {
+  results?: Array<{
+    id?: string;
+    infohash?: string;
+    title?: string;
+    size?: number;
+    seeders?: number;
+    leechers?: number;
+    updatedAt?: string;
+  }>;
+};
+
+type TheRarbgResponse = {
+  results?: Array<{
+    pk?: string;
+    /** name */
+    n?: string;
+    /** added (unix seconds) */
+    a?: number;
+    /** size in bytes */
+    s?: number;
+    /** seeders */
+    se?: number;
+    /** leechers */
+    le?: number;
+    /** info hash */
+    h?: string;
+  }>;
 };
 
 export class CardigannIndexerAdapter implements IndexerAdapter {
@@ -197,14 +245,72 @@ const definitions: Record<string, CardigannDefinition> = {
   "prowlarr-public-torrentgalaxyclone": {
     key: "prowlarr-public-torrentgalaxyclone",
     search: async (config, params) => {
+      // torrentgalaxy.one is a TheRARBG-style frontend: its keyword listing has
+      // no inline magnets (the listing's magnet anchor is JS-populated), but the
+      // same path serves a JSON view carrying info hashes via `?format=json`.
+      // We use that and skip HTML scraping + detail-page round-trips entirely.
       const url = new URL(
         `/get-posts/keywords:${encodeURIComponent(params.query)}/`,
         config.baseUrl,
       );
-      const html = await fetchIndexerText(config, url.toString());
-      // TorrentGalaxy lists magnet links inline, so we parse them directly
-      // rather than following each result to a detail page.
-      return normalizeMagnetListing(config, html, params.limit);
+      url.searchParams.set("format", "json");
+      const payload = parseJson<TheRarbgResponse>(
+        config,
+        await fetchIndexerText(config, url.toString()),
+      );
+      return normalizeTheRarbg(config, payload, params.limit);
+    },
+  },
+  "prowlarr-public-knaben": {
+    key: "prowlarr-public-knaben",
+    search: async (config, params) => {
+      // Knaben is a meta-search aggregator with a JSON API (POST). We pass the
+      // query alone and let the search layer's seeder sort rank results;
+      // forcing `order_by: seeders` here would surface high-seed but
+      // irrelevant torrents instead of query matches.
+      const url = new URL("/v1", config.baseUrl);
+      const body = JSON.stringify({
+        query: params.query,
+        size: Math.min(params.limit ?? 50, 100),
+        hide_unsafe: true,
+        hide_xxx: true,
+      });
+      const payload = parseJson<KnabenResponse>(
+        config,
+        await fetchIndexerText(config, url.toString(), { method: "POST", body }),
+      );
+      return normalizeKnaben(config, payload, params.limit);
+    },
+  },
+  "prowlarr-public-solidtorrents": {
+    key: "prowlarr-public-solidtorrents",
+    search: async (config, params) => {
+      const url = new URL("/api/v1/search", config.baseUrl);
+      url.searchParams.set("q", params.query);
+      url.searchParams.set("sort", "seeders");
+      url.searchParams.set("limit", String(Math.min(params.limit ?? 50, 100)));
+      const payload = parseJson<SolidTorrentsResponse>(
+        config,
+        await fetchIndexerText(config, url.toString()),
+      );
+      return normalizeSolidTorrents(config, payload, params.limit);
+    },
+  },
+  "prowlarr-public-therarbg": {
+    key: "prowlarr-public-therarbg",
+    search: async (config, params) => {
+      // TheRARBG exposes a JSON view of its keyword listing via `?format=json`,
+      // which carries the info hash directly — no detail-page round-trip.
+      const url = new URL(
+        `/get-posts/keywords:${encodeURIComponent(params.query)}/`,
+        config.baseUrl,
+      );
+      url.searchParams.set("format", "json");
+      const payload = parseJson<TheRarbgResponse>(
+        config,
+        await fetchIndexerText(config, url.toString()),
+      );
+      return normalizeTheRarbg(config, payload, params.limit);
     },
   },
 };
@@ -414,6 +520,90 @@ function normalizePirateBay(
     });
 }
 
+function normalizeKnaben(
+  config: IndexerConfig,
+  payload: KnabenResponse,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  return (payload.hits ?? [])
+    .slice(0, limit)
+    .map((hit) => {
+      const infoHash = normalizeHash(hit.hash) ?? infoHashFromMagnet(hit.magnetUrl);
+      return {
+        id: `${config.id}:${infoHash ?? hit.magnetUrl ?? hit.title ?? ""}`,
+        title: hit.title ?? "Untitled",
+        sizeBytes: hit.bytes,
+        seeders: hit.seeders,
+        leechers: deriveLeechers(hit.seeders, hit.peers),
+        publishedAt: toIsoDate(hit.date),
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl:
+          hit.magnetUrl ??
+          (infoHash ? magnetFromInfoHash(infoHash, hit.title) : undefined),
+        infoHash,
+        sourceUrl: hit.details,
+      };
+    })
+    .filter((result) => result.magnetUrl || result.infoHash);
+}
+
+function normalizeSolidTorrents(
+  config: IndexerConfig,
+  payload: SolidTorrentsResponse,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  return (payload.results ?? [])
+    .slice(0, limit)
+    .map((item) => {
+      const infoHash = normalizeHash(item.infohash);
+      return {
+        id: `${config.id}:${infoHash ?? item.id ?? item.title ?? ""}`,
+        title: item.title ?? "Untitled",
+        sizeBytes: item.size,
+        seeders: item.seeders,
+        leechers: item.leechers,
+        publishedAt: toIsoDate(item.updatedAt),
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: infoHash ? magnetFromInfoHash(infoHash, item.title) : undefined,
+        infoHash,
+        sourceUrl: item.id
+          ? new URL(`/view/${item.id}`, config.baseUrl).toString()
+          : config.baseUrl,
+      };
+    })
+    .filter((result) => result.infoHash);
+}
+
+function normalizeTheRarbg(
+  config: IndexerConfig,
+  payload: TheRarbgResponse,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  return (payload.results ?? [])
+    .slice(0, limit)
+    .map((item) => {
+      const infoHash = normalizeHash(item.h);
+      return {
+        id: `${config.id}:${infoHash ?? item.pk ?? item.n ?? ""}`,
+        title: item.n ?? "Untitled",
+        sizeBytes: item.s,
+        seeders: item.se,
+        leechers: item.le,
+        publishedAt: item.a ? new Date(item.a * 1000).toISOString() : undefined,
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: infoHash ? magnetFromInfoHash(infoHash, item.n) : undefined,
+        infoHash,
+        sourceUrl: item.pk
+          ? new URL(`/post-detail/${item.pk}/`, config.baseUrl).toString()
+          : config.baseUrl,
+      };
+    })
+    .filter((result) => result.infoHash);
+}
+
 /**
  * LimeTorrents lists results in a `table2` whose rows link to detail pages of
  * the form `…-torrent-<id>.html`. The magnet lives on the detail page (like
@@ -465,9 +655,11 @@ async function normalizeLimeTorrents(
 }
 
 /**
- * Torrent Downloads links each result to `/torrent/<id>/<slug>`; the magnet (or
- * a labelled infohash) is on that detail page. We de-duplicate the listing
- * links, then resolve magnets per result.
+ * Torrent Downloads lists each result in a `grey_bar3` row linking to
+ * `/torrent/<id>/<slug>`, with `<span>` cells for seeders, leechers and size.
+ * The magnet (or a labelled infohash) lives on the detail page, so we resolve
+ * it per result. The `#disqus_thread` comment anchor reuses the same path — we
+ * exclude the fragment from the link match so it can't masquerade as a result.
  */
 async function normalizeTorrentDownloads(
   config: IndexerConfig,
@@ -475,23 +667,29 @@ async function normalizeTorrentDownloads(
   limit: number | undefined,
 ): Promise<TorrentSearchResult[]> {
   const seen = new Set<string>();
-  const links: Array<{ path: string; title: string }> = [];
-  for (const match of html.matchAll(
-    /<a\b[^>]*href=["'](\/torrent\/\d+\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
-  )) {
-    const path = htmlDecode(match[1])!;
-    if (seen.has(path)) {
+  const rows: Array<{ path: string; title: string; cells: string[] }> = [];
+  for (const block of splitByMarker(html, /class=["'][^"']*grey_bar3[^"']*["']/gi)) {
+    const link = block.match(
+      /<a\b[^>]*href=["'](\/torrent\/\d+\/[^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/i,
+    );
+    const path = link ? htmlDecode(link[1]) : undefined;
+    if (!path || seen.has(path)) {
       continue;
     }
     seen.add(path);
-    links.push({ path, title: cleanText(match[2]) ?? "Untitled" });
-    if (links.length >= (limit ?? 20)) {
+    // Non-empty data spans, in order: [seeders, leechers, size]. The leading
+    // `health` and trailing `check_box` spans hold only images, so drop blanks.
+    const cells = [...block.matchAll(/<span\b[^>]*>([\s\S]*?)<\/span>/gi)]
+      .map((match) => cleanText(match[1]))
+      .filter((text): text is string => Boolean(text));
+    rows.push({ path, title: cleanText(link?.[2]) ?? "Untitled", cells });
+    if (rows.length >= (limit ?? 20)) {
       break;
     }
   }
 
   const results = await Promise.all(
-    links.map(async ({ path, title }) => {
+    rows.map(async ({ path, title, cells }) => {
       const detailUrl = new URL(path, config.baseUrl).toString();
       const { magnet, infoHash } = await resolveMagnetFromDetail(
         config,
@@ -501,6 +699,9 @@ async function normalizeTorrentDownloads(
       return {
         id: `${config.id}:${infoHash ?? path}`,
         title,
+        sizeBytes: parseSize(cells[2]),
+        seeders: toNumber(cells[0]),
+        leechers: toNumber(cells[1]),
         indexerId: config.id,
         indexerName: config.name,
         magnetUrl: magnet,
@@ -513,62 +714,11 @@ async function normalizeTorrentDownloads(
   return results.filter((result) => result.magnetUrl || result.infoHash);
 }
 
-/**
- * Generic normalizer for sites that expose magnet links directly in their
- * search HTML (e.g. TorrentGalaxy). Each magnet carries the info hash and a
- * `dn` display name, so no detail-page round-trip is needed. De-duplicates by
- * info hash.
- */
-function normalizeMagnetListing(
-  config: IndexerConfig,
-  html: string,
-  limit: number | undefined,
-): TorrentSearchResult[] {
-  const seen = new Set<string>();
-  const results: TorrentSearchResult[] = [];
-
-  for (const magnet of extractMagnets(html)) {
-    const infoHash = infoHashFromMagnet(magnet);
-    const key = infoHash ?? magnet;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    results.push({
-      id: `${config.id}:${key}`,
-      title: magnetTitle(magnet) ?? "Untitled",
-      indexerId: config.id,
-      indexerName: config.name,
-      magnetUrl: magnet,
-      infoHash,
-      sourceUrl: config.baseUrl,
-    });
-    if (results.length >= (limit ?? 20)) {
-      break;
-    }
-  }
-
-  return results;
-}
-
 /** Pulls every magnet URI out of an HTML blob, decoding entity-escaped `&`. */
 function extractMagnets(html: string): string[] {
   return [...html.matchAll(/magnet:\?xt=urn:btih:[^\s"'<>]+/gi)].map(
     (match) => htmlDecode(match[0])!,
   );
-}
-
-/** Extracts the `dn` (display name) from a magnet URI, if present. */
-function magnetTitle(magnet: string): string | undefined {
-  const match = magnet.match(/[?&]dn=([^&]+)/i);
-  if (!match) {
-    return undefined;
-  }
-  try {
-    return cleanText(decodeURIComponent(match[1].replace(/\+/g, " ")));
-  } catch {
-    return cleanText(match[1]);
-  }
 }
 
 /** Finds a labelled 40-hex infohash (e.g. "Infohash: …") in a detail page. */
@@ -693,6 +843,12 @@ function pickSourceUrl(...candidates: unknown[]): string | undefined {
   return undefined;
 }
 
+/** Splits HTML into one block per `marker` match (each block = one listing row). */
+function splitByMarker(html: string, marker: RegExp): string[] {
+  const starts = [...html.matchAll(marker)].map((match) => match.index ?? 0);
+  return starts.map((start, i) => html.slice(start, starts[i + 1] ?? html.length));
+}
+
 function tableCells(row: string): string[] {
   return [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(
     (match) => cleanText(match[1]) ?? "",
@@ -729,7 +885,8 @@ function htmlDecode(value: string | undefined): string | undefined {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/gi, " ");
 }
 
 function slugifySearch(query: string): string {
@@ -760,25 +917,4 @@ function fuzzyAgoToIso(value: string | undefined): string | undefined {
   return Number.isFinite(amount)
     ? new Date(Date.now() - amount * multiplier).toISOString()
     : undefined;
-}
-
-function normalizeHash(value: string | undefined): string | undefined {
-  const hash = value?.trim().toUpperCase();
-  return hash && /^[A-F0-9]{40}$/.test(hash) ? hash : undefined;
-}
-
-function infoHashFromMagnet(magnetUrl: string | undefined): string | undefined {
-  if (!magnetUrl) {
-    return undefined;
-  }
-  const match = magnetUrl.match(/btih:([a-zA-Z0-9]+)/);
-  return normalizeHash(match?.[1]);
-}
-
-function magnetFromInfoHash(infoHash: string, title: string | undefined): string {
-  const url = new URL(`magnet:?xt=urn:btih:${infoHash}`);
-  if (title) {
-    url.searchParams.set("dn", title);
-  }
-  return url.toString();
 }

@@ -14,9 +14,13 @@ services:
       KILLSWITCH: "on"
       CONNECT: ${NORDVPN_CONNECT:-United_Kingdom}
       TZ: Europe/London
+      # Whitelist the local Compose subnet past the killswitch so the app can
+      # reach the proxy/FlareSolverr that ride this netns (and they can reply).
+      # Must match the pinned `networks.default` subnet below.
+      NETWORK: "172.30.0.0/24"
     ports:
-      # Ports for services that share this container's network namespace.
-      - "3000:3000"
+      # FlareSolverr's debug endpoint (it shares this container's netns). The app
+      # itself now publishes :3000 directly; only indexer egress rides the VPN.
       - "8191:8191"
     healthcheck:
       test: ["CMD-SHELL", "nordvpn status | grep -q 'Status: Connected'"]
@@ -25,6 +29,19 @@ services:
       retries: 6
       start_period: 60s
 
+  # HTTP forward proxy that rides the nordvpn netns. The app routes ONLY indexer
+  # lookups through it (INDEXER_PROXY_URL), so that traffic egresses via the VPN
+  # while the app's database/Redis/Real-Debrid traffic stays direct.
+  proxy:
+    build:
+      context: ./docker/tinyproxy
+    container_name: dmaga-proxy
+    restart: unless-stopped
+    network_mode: service:nordvpn
+    depends_on:
+      nordvpn:
+        condition: service_healthy
+
   app:
     build:
       context: .
@@ -32,13 +49,25 @@ services:
     container_name: dmaga-app
     command: pnpm dev
     restart: unless-stopped
-    network_mode: service:nordvpn
+    # tini as PID 1 forwards SIGTERM to `pnpm dev`/Next and reaps children, so
+    # the container exits promptly on `down` instead of waiting out the kill
+    # timeout. The grace period caps that wait as a backstop.
+    init: true
+    stop_grace_period: 10s
+    # On the normal Compose network (not the VPN netns): DB/Redis/Real-Debrid
+    # egress directly. Only indexer lookups are proxied over the VPN, via
+    # INDEXER_PROXY_URL below.
+    ports:
+      - "3000:3000"
     # Optional secrets are interpolated from .env when present; network URLs
     # below always win for in-cluster DNS.
     environment:
       DATABASE_URL: postgresql://dmaga:dmaga@postgres:5432/dmaga
       REDIS_URL: redis://redis:6379
-      FLARESOLVERR_URL: http://127.0.0.1:8191/v1
+      # FlareSolverr and the indexer proxy ride the nordvpn netns, reachable as
+      # `nordvpn` on the Compose network.
+      FLARESOLVERR_URL: http://nordvpn:8191/v1
+      INDEXER_PROXY_URL: http://nordvpn:8888
       REAL_DEBRID_CLIENT_ID: ${REAL_DEBRID_CLIENT_ID:-}
       REAL_DEBRID_CLIENT_SECRET: ${REAL_DEBRID_CLIENT_SECRET:-}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
@@ -62,13 +91,15 @@ services:
       retries: 10
       start_period: 40s
     depends_on:
-      nordvpn:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # Indexer search needs these (both ride the VPN netns), but the app serves
+      # the UI / playback before they're ready, so only wait for "started".
       flaresolverr:
+        condition: service_started
+      proxy:
         condition: service_started
 
   debrid-poller:
@@ -78,11 +109,13 @@ services:
     container_name: dmaga-debrid-poller
     command: pnpm worker:debrid
     restart: unless-stopped
-    network_mode: service:nordvpn
+    init: true
+    stop_grace_period: 10s
+    # Polls Real-Debrid only (no indexer lookups), so it stays off the VPN and
+    # talks to Postgres/Redis/Real-Debrid directly.
     environment:
       DATABASE_URL: postgresql://dmaga:dmaga@postgres:5432/dmaga
       REDIS_URL: redis://redis:6379
-      FLARESOLVERR_URL: http://127.0.0.1:8191/v1
       REAL_DEBRID_CLIENT_ID: ${REAL_DEBRID_CLIENT_ID:-}
       REAL_DEBRID_CLIENT_SECRET: ${REAL_DEBRID_CLIENT_SECRET:-}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
@@ -92,8 +125,6 @@ services:
       - /app/node_modules
       - downloads:/downloads
     depends_on:
-      nordvpn:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -149,6 +180,14 @@ services:
     depends_on:
       nordvpn:
         condition: service_healthy
+
+networks:
+  # Pinned so the nordvpn killswitch whitelist (the `NETWORK` env above) has a
+  # stable subnet to allow. Keep the two values in sync.
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
 
 volumes:
   postgres-data:

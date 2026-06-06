@@ -56,6 +56,18 @@ const utilityIndexerPresets = [
       "Template for Torznab indexers that need FlareSolverr challenge handling.",
     requiresApiKey: false,
   },
+  {
+    presetKey: "torrentio",
+    name: "Torrentio",
+    type: "torrentio",
+    baseUrl: "https://torrentio.strem.fun/",
+    fetchMode: "direct",
+    enabled: false,
+    categories: [],
+    description:
+      "Torrentio aggregates many torrent sources by IMDB id (resolved from your query via Cinemeta). Use SxxExx in the query for TV episodes.",
+    requiresApiKey: false,
+  },
 ] satisfies Array<IndexerPreset & { type: IndexerType; fetchMode: IndexerFetchMode }>;
 
 export const defaultIndexerPresets = [

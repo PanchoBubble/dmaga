@@ -13,6 +13,7 @@ import {
   type TorrentSearchResult,
 } from "@/lib/server/indexers/types";
 import { getDebridAvailabilityByInfoHash } from "@/lib/server/real-debrid/availability";
+import { getSavedInfoHashes } from "@/lib/server/saved-items";
 
 export type SearchIndexerFailure = {
   indexerId: string;
@@ -37,8 +38,9 @@ export type IndexerSearchOutcome = {
  */
 export async function searchAllIndexers(
   params: TorrentSearchParams,
+  indexerIds?: string[],
 ): Promise<IndexerSearchOutcome> {
-  const configs = await loadEnabledIndexerConfigs();
+  const configs = await resolveEnabledConfigs(indexerIds);
 
   const settled = await Promise.allSettled(
     configs.map((config) => searchOne(config, params)),
@@ -74,8 +76,9 @@ export async function searchAllIndexers(
 export async function* streamIndexerSearch(
   params: TorrentSearchParams,
   signal?: AbortSignal,
+  indexerIds?: string[],
 ): AsyncGenerator<SearchStreamEvent> {
-  const configs = await loadEnabledIndexerConfigs();
+  const configs = await resolveEnabledConfigs(indexerIds);
   yield { type: "start", indexersTotal: configs.length };
 
   // Tag each search with its index so we can drop it from the pending set the
@@ -122,6 +125,23 @@ export async function* streamIndexerSearch(
   yield { type: "done" };
 }
 
+/**
+ * Loads enabled indexer configs, optionally scoped to a caller-provided id set.
+ * An empty/absent `indexerIds` keeps the full enabled set (the default fan-out);
+ * a non-empty list narrows to those ids, preserving stored order. Ids that don't
+ * match an enabled indexer are simply ignored.
+ */
+async function resolveEnabledConfigs(
+  indexerIds?: string[],
+): Promise<IndexerConfig[]> {
+  const configs = await loadEnabledIndexerConfigs();
+  if (!indexerIds || indexerIds.length === 0) {
+    return configs;
+  }
+  const wanted = new Set(indexerIds);
+  return configs.filter((config) => wanted.has(config.id));
+}
+
 async function searchOne(
   config: IndexerConfig,
   params: TorrentSearchParams,
@@ -134,9 +154,13 @@ async function searchOne(
 async function toDtosWithAvailability(
   results: TorrentSearchResult[],
 ): Promise<SearchResultDto[]> {
-  const availability = await getDebridAvailabilityByInfoHash(
-    results.map((result) => result.infoHash).filter((hash): hash is string => !!hash),
-  );
+  const infoHashes = results
+    .map((result) => result.infoHash)
+    .filter((hash): hash is string => !!hash);
+  const [availability, savedHashes] = await Promise.all([
+    getDebridAvailabilityByInfoHash(infoHashes),
+    getSavedInfoHashes(infoHashes),
+  ]);
 
   return results.map((result) => ({
     id: result.id,
@@ -151,6 +175,7 @@ async function toDtosWithAvailability(
     infoHash: result.infoHash,
     sourceUrl: result.sourceUrl,
     debridState: (result.infoHash && availability.get(result.infoHash)) || "unknown",
+    saved: result.infoHash ? savedHashes.has(result.infoHash) : false,
   }));
 }
 

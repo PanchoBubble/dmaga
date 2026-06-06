@@ -21,6 +21,13 @@ export async function GET(request: NextRequest) {
     .map((value) => value.trim())
     .filter(Boolean);
 
+  // Optional scope: when present, search only these indexer ids; absent means
+  // every enabled indexer (the default fan-out).
+  const indexerIds = request.nextUrl.searchParams
+    .getAll("indexer")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -32,6 +39,7 @@ export async function GET(request: NextRequest) {
         for await (const event of streamIndexerSearch(
           { query, categories, limit: MAX_RESULTS },
           request.signal,
+          indexerIds,
         )) {
           send(event);
         }

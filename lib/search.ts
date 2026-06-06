@@ -23,6 +23,8 @@ export type SearchResultDto = {
   sourceUrl?: string;
   /** Local Real-Debrid state for this torrent, when known. */
   debridState: DebridAvailability;
+  /** True when the user has starred (favorited) this torrent. */
+  saved?: boolean;
 };
 
 /** A single indexer that failed during a fan-out search (partial failure). */
@@ -84,6 +86,48 @@ export function sortBySeeders<T extends { seeders?: number }>(results: T[]): T[]
   return [...results].sort((a, b) => (b.seeders ?? 0) - (a.seeders ?? 0));
 }
 
+/** Display sort options offered in the results header. All are descending. */
+export type SortKey = "seeds" | "size" | "peers" | "age";
+
+export const sortOptions: { key: SortKey; label: string }[] = [
+  { key: "seeds", label: "Seeds" },
+  { key: "size", label: "Size" },
+  { key: "peers", label: "Peers" },
+  { key: "age", label: "Newest" },
+];
+
+type SortableResult = {
+  seeders?: number;
+  leechers?: number;
+  sizeBytes?: number;
+  publishedAt?: string;
+};
+
+/** Numeric ranking value for a result under the given key (higher sorts first). */
+function rankFor(result: SortableResult, key: SortKey): number {
+  switch (key) {
+    case "seeds":
+      return result.seeders ?? 0;
+    case "peers":
+      return result.leechers ?? 0;
+    case "size":
+      return result.sizeBytes ?? 0;
+    case "age": {
+      // Newest first; results with no timestamp sort to the bottom.
+      const ms = result.publishedAt ? Date.parse(result.publishedAt) : Number.NaN;
+      return Number.isNaN(ms) ? Number.NEGATIVE_INFINITY : ms;
+    }
+  }
+}
+
+/** Sorts results descending by the chosen key; ties fall back to seeders. */
+export function sortResults<T extends SortableResult>(results: T[], key: SortKey): T[] {
+  return [...results].sort((a, b) => {
+    const delta = rankFor(b, key) - rankFor(a, key);
+    return delta !== 0 ? delta : (b.seeders ?? 0) - (a.seeders ?? 0);
+  });
+}
+
 /**
  * Maps the app's coarse media categories onto standard Newznab/Torznab category
  * ids. `all` returns no ids so each indexer falls back to its own configured
@@ -98,6 +142,26 @@ const categoryTorznabIds: Record<Exclude<MediaCategory, "all">, string[]> = {
 
 export function torznabCategoriesFor(category: MediaCategory): string[] {
   return category === "all" ? [] : categoryTorznabIds[category];
+}
+
+/**
+ * Builds a `magnet:` URI for opening a result in the user's torrent client.
+ * Prefers the indexer-provided magnet; otherwise synthesizes one from the info
+ * hash (with the title as the display name). Returns null when neither exists.
+ */
+export function magnetLinkFor(result: {
+  magnetUrl?: string;
+  infoHash?: string;
+  title?: string;
+}): string | null {
+  if (result.magnetUrl) {
+    return result.magnetUrl;
+  }
+  if (result.infoHash) {
+    const name = result.title ? `&dn=${encodeURIComponent(result.title)}` : "";
+    return `magnet:?xt=urn:btih:${result.infoHash}${name}`;
+  }
+  return null;
 }
 
 const SIZE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"] as const;

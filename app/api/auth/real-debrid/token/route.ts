@@ -8,6 +8,20 @@ const requestSchema = z.object({
   deviceCode: z.string().min(1),
 });
 
+/**
+ * While the user hasn't authorized the device yet, Real-Debrid answers the
+ * credentials poll with 400 (`authorization_pending`) or 403 carrying an empty
+ * error payload. A populated error string (e.g. `permission_denied`,
+ * `wrong_parameter`) is a real failure and must surface.
+ */
+function isAuthorizationPending(error: RealDebridOAuthError) {
+  if (error.status === 400) {
+    return true;
+  }
+
+  return error.status === 403 && !error.payload?.error;
+}
+
 export async function POST(request: NextRequest) {
   const body = requestSchema.safeParse(await request.json());
 
@@ -24,7 +38,7 @@ export async function POST(request: NextRequest) {
       accountId: account.accountId,
     });
   } catch (error) {
-    if (error instanceof RealDebridOAuthError && error.status === 400) {
+    if (error instanceof RealDebridOAuthError && isAuthorizationPending(error)) {
       return NextResponse.json(
         {
           linked: false,

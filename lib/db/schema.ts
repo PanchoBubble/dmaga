@@ -13,7 +13,11 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const fetchModeEnum = pgEnum("fetch_mode", ["direct", "flaresolverr"]);
-export const indexerTypeEnum = pgEnum("indexer_type", ["torznab", "cardigann"]);
+export const indexerTypeEnum = pgEnum("indexer_type", [
+  "torznab",
+  "cardigann",
+  "torrentio",
+]);
 export const debridItemStatusEnum = pgEnum("debrid_item_status", [
   "saved",
   "adding",
