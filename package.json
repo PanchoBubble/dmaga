@@ -23,6 +23,7 @@
     "class-variance-authority": "latest",
     "clsx": "latest",
     "drizzle-orm": "^0.45.2",
+    "fast-xml-parser": "^5.8.0",
     "framer-motion": "latest",
     "lucide-react": "latest",
     "next": "latest",
