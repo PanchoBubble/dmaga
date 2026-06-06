@@ -63,6 +63,10 @@ export function useTitleSources(
       setState(initialState);
       return;
     }
+    if (indexerIds && indexerIds.length === 0) {
+      setState(initialState);
+      return;
+    }
 
     const controller = new AbortController();
     setState({ ...initialState, status: "loading" });
