@@ -25,8 +25,12 @@ http://YOUR_MACHINE_IP:3000
 
 ## Docker
 
-Copy `.env.example` to `.env`, then set `NORDVPN_TOKEN` before starting the
-Compose stack. The token is a NordVPN access token, not your account password.
+Copy `.env.example` to `.env`, then set `NORDVPN_WIREGUARD_PRIVATE_KEY` before
+starting the Compose stack. The VPN runs via [gluetun](https://github.com/qdm12/gluetun)
+using NordVPN's WireGuard (NordLynx) backend, so this is a **WireGuard private
+key**, not your account password or an access token. Get it from the NordVPN
+dashboard → Manual setup / NordLynx configuration (see gluetun's
+[NordVPN wiki](https://github.com/qdm12/gluetun-wiki/blob/main/setup/providers/nordvpn.md)).
 
 First time (or after dependency/Dockerfile changes), build the image:
 
@@ -62,35 +66,32 @@ If a build is interrupted (e.g. the VM runs out of disk), it can leave
 half-built working-containers behind that quietly consume space — `make clean`
 clears those and any dangling images.
 
-The Compose stack routes outbound traffic from these containers through the
-`nordvpn` container:
+Only **indexer lookups** egress through the VPN, not everything. A `tinyproxy`
+container and `flaresolverr` ride the `gluetun` network namespace, and the app
+sends just its indexer fetches through them (`INDEXER_PROXY_URL`); database,
+Redis, and Real-Debrid traffic stays direct on the Compose network.
 
-- `app`, which handles indexer search, Real-Debrid API calls, and queued host downloads
-- `debrid-poller`, which polls Real-Debrid
-- `flaresolverr`, which fetches protected indexer pages when enabled per indexer
+`gluetun` publishes the shared-network port for FlareSolverr:
 
-`nordvpn` publishes the shared-network ports for those services:
-
-- App: `http://localhost:3000`
+- App: `http://localhost:3000` (published directly by the app, not via the VPN)
 - FlareSolverr health/debug endpoint: `http://localhost:8191`
 
-The VPN container starts with NordLynx and the NordVPN kill switch enabled. If
-the VPN disconnects or never authenticates, the routed containers should fail
-external requests rather than leaking them outside the VPN. Database and Redis
-traffic stays inside the Compose network.
+gluetun is killswitch-by-default: if the VPN disconnects or never authenticates,
+the netns-sharing containers fail external requests rather than leaking them
+outside the tunnel.
 
-Optional VPN settings:
+Optional VPN settings (gluetun uses full country names with spaces):
 
 ```bash
-NORDVPN_CONNECT="United_Kingdom"
+NORDVPN_COUNTRY="Germany"
 ```
 
-To sanity-check egress after the stack is healthy:
+To sanity-check egress after the stack is healthy (the proxy is what rides the
+VPN, so check through it):
 
 ```bash
-docker compose exec app wget -qO- https://ifconfig.me
-docker compose stop nordvpn
-docker compose exec app wget -qO- --timeout=10 https://ifconfig.me
+make logs S=gluetun                                   # confirm the tunnel is up
+podman compose exec app wget -qO- --proxy=on -e https_proxy=http://gluetun:8888 https://ifconfig.me
 ```
 
 The second command should fail while the VPN is stopped.

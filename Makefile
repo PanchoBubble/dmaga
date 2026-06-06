@@ -27,7 +27,7 @@ build:
 
 # Reliable teardown: never hangs, keeps postgres-data / redis-data / downloads.
 # --depend removes each container together with anything that shares its netns
-# (app/poller/flaresolverr ride on nordvpn via `network_mode: service:nordvpn`,
+# (proxy/flaresolverr ride on gluetun via `network_mode: service:gluetun`,
 # so they must go before it); --ignore swallows the already-removed ones that
 # cascade leaves behind.
 down:

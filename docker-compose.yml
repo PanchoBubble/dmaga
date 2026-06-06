@@ -1,45 +1,57 @@
 services:
-  nordvpn:
-    image: ghcr.io/bubuntux/nordvpn:latest
-    container_name: dmaga-nordvpn
+  # NordVPN via gluetun (replaced the 1.1GB ghcr.io/bubuntux/nordvpn image with
+  # this ~50MB one). gluetun is killswitch-by-default. NOTE: gluetun's NordVPN
+  # WireGuard backend needs a WIREGUARD_PRIVATE_KEY (the old NORDVPN_TOKEN does
+  # NOT work) — get it from the NordVPN dashboard → Manual setup / NordLynx
+  # config. OpenVPN fallback: set VPN_TYPE=openvpn with OPENVPN_USER/PASSWORD
+  # service credentials instead.
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: dmaga-gluetun
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
-      - NET_RAW
     devices:
       - /dev/net/tun
     environment:
-      TOKEN: ${NORDVPN_TOKEN:?Set NORDVPN_TOKEN in .env before starting the VPN-routed stack}
-      TECHNOLOGY: NordLynx
-      KILLSWITCH: "on"
-      CONNECT: ${NORDVPN_CONNECT:-United_Kingdom}
+      VPN_SERVICE_PROVIDER: nordvpn
+      VPN_TYPE: wireguard
+      WIREGUARD_PRIVATE_KEY: ${NORDVPN_WIREGUARD_PRIVATE_KEY:?Set NORDVPN_WIREGUARD_PRIVATE_KEY in .env (from NordVPN dashboard → Manual setup / NordLynx) before starting the VPN-routed stack}
+      SERVER_COUNTRIES: ${NORDVPN_COUNTRY:-Germany}
       TZ: Europe/London
-      # Whitelist the local Compose subnet past the killswitch so the app can
-      # reach the proxy/FlareSolverr that ride this netns (and they can reply).
+      # Allow the local Compose subnet past the killswitch so the app can reach
+      # the proxy/FlareSolverr that ride this netns (and they can reply).
       # Must match the pinned `networks.default` subnet below.
-      NETWORK: "172.30.0.0/24"
+      FIREWALL_OUTBOUND_SUBNETS: 172.30.0.0/24
+      # Open gluetun's firewall for the ports its netns-sharing siblings serve on
+      # the Compose network: FlareSolverr (8191) and tinyproxy (8888).
+      FIREWALL_INPUT_PORTS: 8191,8888
     ports:
       # FlareSolverr's debug endpoint (it shares this container's netns). The app
       # itself now publishes :3000 directly; only indexer egress rides the VPN.
       - "8191:8191"
+    # gluetun's image defines no Docker HEALTHCHECK, so `depends_on:
+    # service_healthy` has nothing to wait on unless we add one. gluetun runs an
+    # internal healthcheck server on 127.0.0.1:9999 and `/gluetun-entrypoint
+    # healthcheck` is its client — the canonical gluetun compose healthcheck.
     healthcheck:
-      test: ["CMD-SHELL", "nordvpn status | grep -q 'Status: Connected'"]
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
       interval: 30s
       timeout: 10s
-      retries: 6
-      start_period: 60s
+      retries: 5
+      start_period: 20s
 
-  # HTTP forward proxy that rides the nordvpn netns. The app routes ONLY indexer
-  # lookups through it (INDEXER_PROXY_URL), so that traffic egresses via the VPN
-  # while the app's database/Redis/Real-Debrid traffic stays direct.
+  # HTTP forward proxy that rides the gluetun (VPN) netns. The app routes ONLY
+  # indexer lookups through it (INDEXER_PROXY_URL), so that traffic egresses via
+  # the VPN while the app's database/Redis/Real-Debrid traffic stays direct.
   proxy:
     build:
       context: ./docker/tinyproxy
     container_name: dmaga-proxy
     restart: unless-stopped
-    network_mode: service:nordvpn
+    network_mode: service:gluetun
     depends_on:
-      nordvpn:
+      gluetun:
         condition: service_healthy
 
   app:
@@ -64,10 +76,10 @@ services:
     environment:
       DATABASE_URL: postgresql://dmaga:dmaga@postgres:5432/dmaga
       REDIS_URL: redis://redis:6379
-      # FlareSolverr and the indexer proxy ride the nordvpn netns, reachable as
-      # `nordvpn` on the Compose network.
-      FLARESOLVERR_URL: http://nordvpn:8191/v1
-      INDEXER_PROXY_URL: http://nordvpn:8888
+      # FlareSolverr and the indexer proxy ride the gluetun (VPN) netns,
+      # reachable as `gluetun` on the Compose network.
+      FLARESOLVERR_URL: http://gluetun:8191/v1
+      INDEXER_PROXY_URL: http://gluetun:8888
       REAL_DEBRID_CLIENT_ID: ${REAL_DEBRID_CLIENT_ID:-}
       REAL_DEBRID_CLIENT_SECRET: ${REAL_DEBRID_CLIENT_SECRET:-}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
@@ -173,7 +185,7 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: dmaga-flaresolverr
     restart: unless-stopped
-    network_mode: service:nordvpn
+    network_mode: service:gluetun
     environment:
       LOG_LEVEL: info
       TZ: Europe/London
@@ -184,12 +196,12 @@ services:
       retries: 10
       start_period: 30s
     depends_on:
-      nordvpn:
+      gluetun:
         condition: service_healthy
 
 networks:
-  # Pinned so the nordvpn killswitch whitelist (the `NETWORK` env above) has a
-  # stable subnet to allow. Keep the two values in sync.
+  # Pinned so the gluetun killswitch allowance (FIREWALL_OUTBOUND_SUBNETS above)
+  # has a stable subnet to allow. Keep the two values in sync.
   default:
     ipam:
       config:
