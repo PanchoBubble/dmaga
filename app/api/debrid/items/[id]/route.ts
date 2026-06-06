@@ -9,7 +9,7 @@ import { RealDebridApiError } from "@/lib/server/real-debrid/client";
 import { RealDebridAuthError } from "@/lib/server/real-debrid/auth-service";
 
 const actionSchema = z.object({
-  action: z.enum(["remove_local", "delete_from_debrid"]),
+  action: z.enum(["remove_local", "delete_from_debrid", "resolve_links"]),
 });
 
 type RouteContext = { params: Promise<{ id: string }> };

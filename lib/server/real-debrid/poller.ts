@@ -223,16 +223,23 @@ async function getSelectableTorrent(client: RealDebridClient, torrentId: string)
   return torrent;
 }
 
-async function refreshDebridLinks(
+/**
+ * Replaces the stored {@link debridLinks} for an item with fresh rows built from
+ * the torrent's Real-Debrid links (unrestricting each to capture filename, size
+ * and a direct URL). Shared by the poller and the add flow so a torrent that is
+ * already cached/ready surfaces playable/downloadable files immediately. Returns
+ * the number of links created.
+ */
+export async function refreshDebridLinks(
   debridItemId: string,
   torrent: RealDebridTorrent,
   client: RealDebridClient,
-) {
+): Promise<number> {
   const links = torrent.links ?? [];
   await db.delete(debridLinks).where(eq(debridLinks.debridItemId, debridItemId));
 
   if (!links.length) {
-    return;
+    return 0;
   }
 
   const unrestricted = await Promise.all(
@@ -252,6 +259,8 @@ async function refreshDebridLinks(
         toDebridLinkInsert(debridItemId, originalLink, response),
       ),
     );
+
+  return links.length;
 }
 
 function toDebridLinkInsert(

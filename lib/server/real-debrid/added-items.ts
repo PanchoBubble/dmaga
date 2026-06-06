@@ -5,6 +5,7 @@ import { debridItems, debridLinks, hostDownloads, mediaItems } from "@/lib/db/sc
 import type { AddedItemDto } from "@/lib/debrid";
 import { createAuthenticatedRealDebridClient } from "@/lib/server/real-debrid/auth-service";
 import { toAvailability } from "@/lib/server/real-debrid/availability";
+import { refreshDebridLinks } from "@/lib/server/real-debrid/poller";
 
 /**
  * Lists locally-tracked Real-Debrid items for the Added page, newest activity
@@ -112,7 +113,10 @@ export async function listAddedItems(): Promise<AddedItemDto[]> {
   }));
 }
 
-export type AddedItemAction = "remove_local" | "delete_from_debrid";
+export type AddedItemAction =
+  | "remove_local"
+  | "delete_from_debrid"
+  | "resolve_links";
 
 export class AddedItemActionError extends Error {
   constructor(
@@ -125,8 +129,8 @@ export class AddedItemActionError extends Error {
 }
 
 /**
- * Marks an Added item as removed locally, optionally deleting/cancelling the
- * corresponding Real-Debrid torrent first when one is known.
+ * Applies an action to an Added item: removing it locally, deleting it from
+ * Real-Debrid, or (re)resolving its download links from the Real-Debrid torrent.
  */
 export async function updateAddedItemAction(
   id: string,
@@ -136,6 +140,11 @@ export async function updateAddedItemAction(
 
   if (!item) {
     throw new AddedItemActionError("Added item not found.", 404);
+  }
+
+  if (action === "resolve_links") {
+    await resolveItemLinks(item);
+    return findRefreshedItem(id);
   }
 
   if (action === "delete_from_debrid" && item.realDebridTorrentId) {
@@ -154,6 +163,31 @@ export async function updateAddedItemAction(
     .where(eq(debridItems.id, id))
     .returning();
 
+  return findRefreshedItem(id);
+}
+
+/**
+ * Fetches the Real-Debrid torrent for a ready item and (re)builds its download
+ * links — for items added before links were created or when the poller never
+ * ran. Throws if the item isn't ready or has no linked torrent.
+ */
+async function resolveItemLinks(item: typeof debridItems.$inferSelect) {
+  if (item.status !== "ready") {
+    throw new AddedItemActionError("This item isn't ready to resolve yet.", 409);
+  }
+  if (!item.realDebridTorrentId) {
+    throw new AddedItemActionError(
+      "No Real-Debrid torrent is linked to this item.",
+      400,
+    );
+  }
+
+  const client = await createAuthenticatedRealDebridClient();
+  const torrent = await client.getTorrent(item.realDebridTorrentId);
+  await refreshDebridLinks(item.id, torrent, client);
+}
+
+async function findRefreshedItem(id: string): Promise<AddedItemDto> {
   const refreshed = (await listAddedItems()).find((candidate) => candidate.id === id);
   if (!refreshed) {
     throw new AddedItemActionError("Added item not found after update.", 500);

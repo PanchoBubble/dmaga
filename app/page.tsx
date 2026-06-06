@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  ListFilter,
   Loader2,
   Search,
   SettingsIcon,
@@ -11,17 +12,18 @@ import {
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { CategoryFilterModal } from "@/components/category-filter-modal";
 import { IndexerFilterModal } from "@/components/indexer-filter-modal";
 import { TorrentResultCard } from "@/components/torrent-result-card";
 import { Button } from "@/components/ui/button";
 import { useSearchStore } from "@/hooks/use-search-store";
-import { mediaCategories } from "@/lib/mock-media";
+import { filterableMediaCategories } from "@/lib/mock-media";
 import { sortOptions, type SortKey } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
 export default function SearchPage() {
   const query = useSearchStore((state) => state.query);
-  const category = useSearchStore((state) => state.category);
+  const selectedCategories = useSearchStore((state) => state.selectedCategories);
   const status = useSearchStore((state) => state.status);
   const lastQuery = useSearchStore((state) => state.lastQuery);
   const results = useSearchStore((state) => state.results);
@@ -34,7 +36,7 @@ export default function SearchPage() {
   const availableIndexers = useSearchStore((state) => state.availableIndexers);
   const selectedIndexerIds = useSearchStore((state) => state.selectedIndexerIds);
   const setQuery = useSearchStore((state) => state.setQuery);
-  const setCategory = useSearchStore((state) => state.setCategory);
+  const setSelectedCategories = useSearchStore((state) => state.setSelectedCategories);
   const setIndexerFilter = useSearchStore((state) => state.setIndexerFilter);
   const loadIndexers = useSearchStore((state) => state.loadIndexers);
   const hydrateSelection = useSearchStore((state) => state.hydrateSelection);
@@ -43,6 +45,7 @@ export default function SearchPage() {
   const stopSearch = useSearchStore((state) => state.stopSearch);
 
   const [filterOpen, setFilterOpen] = useState(false);
+  const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
 
   // Restore the persisted indexer scope after mount (kept out of the store
   // initializer to avoid an SSR hydration mismatch), then load the enabled
@@ -56,6 +59,10 @@ export default function SearchPage() {
   const totalIndexers = availableIndexers.length;
   const selectedCount = selectedIndexerIds === null ? totalIndexers : selectedIndexerIds.length;
   const allIndexersSelected = selectedIndexerIds === null;
+  const totalCategories = filterableMediaCategories.length;
+  const selectedCategoryCount =
+    selectedCategories === null ? totalCategories : selectedCategories.length;
+  const allCategoriesSelected = selectedCategories === null;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -108,19 +115,18 @@ export default function SearchPage() {
         </form>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {mediaCategories.map((option) => (
-            <Button
-              aria-pressed={category === option.id}
-              className={cn("h-9 px-3 text-xs", category === option.id && "font-black")}
-              key={option.id}
-              onClick={() => setCategory(option.id)}
-              size="sm"
-              type="button"
-              variant={category === option.id ? "secondary" : "outline"}
-            >
-              {option.label}
-            </Button>
-          ))}
+          <Button
+            className={cn("h-9 px-3 text-xs", !allCategoriesSelected && "font-black")}
+            onClick={() => setCategoryFilterOpen(true)}
+            size="sm"
+            type="button"
+            variant={allCategoriesSelected ? "outline" : "secondary"}
+          >
+            <ListFilter className="size-4" />
+            {allCategoriesSelected
+              ? "Categories · All"
+              : `Categories · ${selectedCategoryCount}/${totalCategories}`}
+          </Button>
 
           {totalIndexers > 0 ? (
             <Button
@@ -136,12 +142,27 @@ export default function SearchPage() {
           ) : null}
         </div>
 
+        {selectedCategories?.length === 0 ? (
+          <p className="mt-2 text-xs font-bold text-destructive">
+            No categories selected — pick at least one to search.
+          </p>
+        ) : null}
+
         {selectedIndexerIds?.length === 0 ? (
           <p className="mt-2 text-xs font-bold text-destructive">
             No indexers selected — pick at least one to search.
           </p>
         ) : null}
       </section>
+
+      {categoryFilterOpen ? (
+        <CategoryFilterModal
+          categories={filterableMediaCategories}
+          onApply={setSelectedCategories}
+          onClose={() => setCategoryFilterOpen(false)}
+          selectedIds={selectedCategories}
+        />
+      ) : null}
 
       {filterOpen ? (
         <IndexerFilterModal
@@ -267,15 +288,6 @@ function SearchBody({
         />
       ) : null}
 
-      {providers.length > 1 ? (
-        <IndexerFilter
-          active={activeFilter}
-          onSelect={onSelectIndexer}
-          providers={providers}
-          total={results.length}
-        />
-      ) : null}
-
       {stopped ? (
         <Notice tone="accent">
           {`Stopped early — showing partial results from ${indexersCompleted} of ${indexersSearched} ${
@@ -284,11 +296,22 @@ function SearchBody({
         </Notice>
       ) : null}
 
-      {indexerErrors.length ? <PartialFailureNotice errors={indexerErrors} /> : null}
-
       {results.length ? (
         <>
-          <SortControl active={sortKey} onSelect={setSortKey} />
+          <div className="flex flex-wrap items-center gap-3">
+            {providers.length > 1 ? (
+              <IndexerFilter
+                active={activeFilter}
+                onSelect={onSelectIndexer}
+                providers={providers}
+                total={results.length}
+              />
+            ) : null}
+            <SortControl active={sortKey} onSelect={setSortKey} />
+          </div>
+          {indexerErrors.length ? (
+            <PartialFailureNotice errors={indexerErrors} />
+          ) : null}
           <section className="grid gap-4 lg:grid-cols-2">
             {visibleResults.map((result, index) => (
               <TorrentResultCard index={index} key={result.id} result={result} />
@@ -302,13 +325,18 @@ function SearchBody({
           ))}
         </section>
       ) : (
-        <Panel title="No results">
-          <p className="mt-2 text-sm text-muted-foreground">
-            {`No torrents matched "${lastQuery}" across ${indexersSearched} ${
-              indexersSearched === 1 ? "indexer" : "indexers"
-            }.`}
-          </p>
-        </Panel>
+        <>
+          {indexerErrors.length ? (
+            <PartialFailureNotice errors={indexerErrors} />
+          ) : null}
+          <Panel title="No results">
+            <p className="mt-2 text-sm text-muted-foreground">
+              {`No torrents matched "${lastQuery}" across ${indexersSearched} ${
+                indexersSearched === 1 ? "indexer" : "indexers"
+              }.`}
+            </p>
+          </Panel>
+        </>
       )}
     </div>
   );
@@ -326,35 +354,26 @@ function IndexerFilter({
   onSelect: (indexerName: string | null) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <label className="flex items-center gap-2">
       <span className="text-xs font-black uppercase text-muted-foreground">
         Indexer
       </span>
-      <Button
-        aria-pressed={active === null}
-        className={cn("h-8 px-2.5 text-xs", active === null && "font-black")}
-        onClick={() => onSelect(null)}
-        size="sm"
-        type="button"
-        variant={active === null ? "secondary" : "outline"}
+      <select
+        className={cn(
+          "h-8 max-w-[12rem] border-2 border-foreground bg-background px-2 text-xs font-bold outline-none focus:ring-2 focus:ring-ring",
+          active !== null && "font-black",
+        )}
+        onChange={(event) => onSelect(event.target.value || null)}
+        value={active ?? ""}
       >
-        {`All · ${total}`}
-      </Button>
-      {providers.map(([name, count]) => (
-        <Button
-          aria-pressed={active === name}
-          className={cn("h-8 max-w-full px-2.5 text-xs", active === name && "font-black")}
-          key={name}
-          onClick={() => onSelect(name)}
-          size="sm"
-          type="button"
-          variant={active === name ? "secondary" : "outline"}
-        >
-          <span className="truncate">{name}</span>
-          <span className="tabular-nums opacity-70">{count}</span>
-        </Button>
-      ))}
-    </div>
+        <option value="">{`All · ${total}`}</option>
+        {providers.map(([name, count]) => (
+          <option key={name} value={name}>
+            {`${name} · ${count}`}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -366,22 +385,20 @@ function SortControl({
   onSelect: (key: SortKey) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <label className="flex items-center gap-2">
       <span className="text-xs font-black uppercase text-muted-foreground">Sort</span>
-      {sortOptions.map((option) => (
-        <Button
-          aria-pressed={active === option.key}
-          className={cn("h-8 px-2.5 text-xs", active === option.key && "font-black")}
-          key={option.key}
-          onClick={() => onSelect(option.key)}
-          size="sm"
-          type="button"
-          variant={active === option.key ? "secondary" : "outline"}
-        >
-          {option.label}
-        </Button>
-      ))}
-    </div>
+      <select
+        className="h-8 border-2 border-foreground bg-background px-2 text-xs font-bold outline-none focus:ring-2 focus:ring-ring"
+        onChange={(event) => onSelect(event.target.value as SortKey)}
+        value={active}
+      >
+        {sortOptions.map((option) => (
+          <option key={option.key} value={option.key}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -413,7 +430,7 @@ function PartialFailureNotice({
   errors: SearchBodyProps["indexerErrors"];
 }) {
   return (
-    <div className="border-2 border-foreground bg-accent p-3 text-sm shadow-line">
+    <div className="border-2 border-foreground bg-yellow-300 p-3 text-sm text-black">
       <p className="flex items-center gap-2 font-black">
         <AlertTriangle className="size-4" />
         {`${errors.length} ${errors.length === 1 ? "indexer" : "indexers"} failed`}

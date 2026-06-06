@@ -1,10 +1,17 @@
 "use client";
 
 import { AlertTriangle, Copy, Check, Download, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { PlaybackKind } from "@/lib/playback";
+
+/** A sidecar subtitle track served as WebVTT by the subtitle route. */
+export type PlayerSubtitle = {
+  id: string;
+  lang: string | null;
+  label: string;
+};
 
 type VideoPlayerProps = {
   /** Debrid link id, used to build refresh/playlist URLs. */
@@ -15,6 +22,27 @@ type VideoPlayerProps = {
   kind: PlaybackKind;
   /** Whether the browser can decode this format in an HTML5 element. */
   browserPlayable: boolean;
+  /** Sidecar subtitle files in the same pack, offered as `<track>` selections. */
+  subtitles?: PlayerSubtitle[];
+};
+
+/**
+ * Minimal typing for the non-standard `HTMLMediaElement.audioTracks` API. Only
+ * Safari (and a few Chromium builds behind a flag) populate it; elsewhere it's
+ * absent, so the audio-track switcher stays hidden.
+ */
+type MediaAudioTrack = {
+  id: string;
+  label: string;
+  language: string;
+  enabled: boolean;
+};
+type AudioTrackList = {
+  length: number;
+  [index: number]: MediaAudioTrack;
+};
+type VideoWithAudioTracks = HTMLVideoElement & {
+  audioTracks?: AudioTrackList;
 };
 
 /**
@@ -28,10 +56,44 @@ export function VideoPlayer({
   mimeType,
   kind,
   browserPlayable,
+  subtitles = [],
 }: VideoPlayerProps) {
   // Promote to the handoff panel if the embedded element fails to decode.
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const showHandoff = !browserPlayable || playbackFailed;
+
+  // The <video> is reached via the DOM (not a React ref) for the imperative,
+  // non-standard audioTracks API, so mutating track.enabled stays outside
+  // React's tracked state.
+  const videoId = useId();
+  const [audioTracks, setAudioTracks] = useState<MediaAudioTrack[]>([]);
+
+  const audioTrackListOf = useCallback((): AudioTrackList | undefined => {
+    const element = document.getElementById(videoId) as VideoWithAudioTracks | null;
+    return element?.audioTracks;
+  }, [videoId]);
+
+  // Read the (Safari-only) audioTracks list once metadata loads; hidden when
+  // the browser doesn't expose it or there's only a single track to choose.
+  const syncAudioTracks = useCallback(() => {
+    const tracks = audioTrackListOf();
+    if (!tracks || tracks.length <= 1) {
+      setAudioTracks([]);
+      return;
+    }
+    setAudioTracks(Array.from({ length: tracks.length }, (_, i) => tracks[i]));
+  }, [audioTrackListOf]);
+
+  function selectAudioTrack(index: number) {
+    const tracks = audioTrackListOf();
+    if (!tracks) {
+      return;
+    }
+    for (let i = 0; i < tracks.length; i++) {
+      tracks[i].enabled = i === index;
+    }
+    syncAudioTracks();
+  }
 
   return (
     <div className="space-y-4">
@@ -50,16 +112,55 @@ export function VideoPlayer({
             autoPlay
             className="aspect-video w-full border-2 border-foreground bg-black shadow-line"
             controls
+            id={videoId}
             onError={() => setPlaybackFailed(true)}
+            onLoadedMetadata={syncAudioTracks}
             playsInline
             src={url}
           >
             <source src={url} type={mimeType ?? undefined} />
+            {subtitles.map((subtitle) => (
+              <track
+                key={subtitle.id}
+                kind="subtitles"
+                label={subtitle.label}
+                src={`/api/debrid/links/${subtitle.id}/subtitle.vtt`}
+                srcLang={subtitle.lang ?? undefined}
+              />
+            ))}
           </video>
         )
       ) : (
         <HandoffPanel inBrowserAttempted={playbackFailed} linkId={linkId} url={url} />
       )}
+
+      {!showHandoff && kind === "video" && subtitles.length ? (
+        <p className="text-xs font-semibold text-muted-foreground">
+          {subtitles.length} subtitle track{subtitles.length === 1 ? "" : "s"}{" "}
+          available — use the player&apos;s CC button to choose.
+        </p>
+      ) : null}
+
+      {!showHandoff && audioTracks.length > 1 ? (
+        <div className="border-2 border-foreground bg-card p-3">
+          <p className="text-xs font-black uppercase text-muted-foreground">
+            Audio track
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {audioTracks.map((audioTrack, index) => (
+              <Button
+                key={audioTrack.id || index}
+                onClick={() => selectAudioTrack(index)}
+                size="sm"
+                type="button"
+                variant={audioTrack.enabled ? "default" : "outline"}
+              >
+                {audioTrack.label || audioTrack.language || `Track ${index + 1}`}
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {!showHandoff ? (
         <details className="border-2 border-foreground bg-card p-3 text-sm">
@@ -131,7 +232,7 @@ function HandoffActions({ linkId, url }: { linkId: string; url: string }) {
         </a>
       </Button>
       <Button asChild variant="outline">
-        <a href={url} rel="noreferrer" target="_blank">
+        <a href={`/api/debrid/links/${linkId}/download`} rel="noreferrer" target="_blank">
           <Download className="size-4" />
           Download
         </a>

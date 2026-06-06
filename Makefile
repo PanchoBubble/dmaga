@@ -38,8 +38,12 @@ down:
 # Restart without rebuilding (code changes hot-reload via the bind mount).
 restart: down up
 
-# Full recreate: tear down, rebuild the image, then start.
+# Full recreate: tear down, drop the managed node_modules/.next volumes so they
+# repopulate from the freshly built image (a rebuild usually means deps or the
+# Dockerfile changed), then rebuild and start. Removing the named volumes here
+# is also what keeps them from going stale — a plain `make restart` reuses them.
 rebuild: down
+	-podman volume rm dmaga_app-node-modules dmaga_app-next dmaga_poller-node-modules 2>/dev/null
 	podman compose up -d --build
 
 # Follow logs for one service, e.g. `make logs S=debrid-poller` (defaults to app).
@@ -49,11 +53,14 @@ logs:
 ps:
 	podman compose ps
 
-# Reclaim space: drop dangling (<none>) images and any leftover build
-# working-containers a failed/interrupted build left behind. Safe — touches no
-# tagged images, no volumes, no running containers.
+# Reclaim space: drop dangling (<none>) images, orphaned anonymous volumes
+# (64-hex names, e.g. old node_modules copies from anonymous-volume recreates),
+# and any leftover build working-containers a failed build left behind. Safe —
+# touches no tagged images, no NAMED volumes (dmaga_*), no running containers.
 clean:
 	-podman image prune -f
+	@anon=$$(podman volume ls -q 2>/dev/null | grep -E '^[0-9a-f]{64}$$'); \
+	if [ -n "$$anon" ]; then echo "$$anon" | xargs -r podman volume rm; echo "removed orphaned anonymous volumes"; else echo "no orphaned anonymous volumes"; fi
 	@ext=$$(podman ps -a --external --format '{{.ID}} {{.Names}}' 2>/dev/null | grep working-container | awk '{print $$1}'); \
 	if [ -n "$$ext" ]; then echo "$$ext" | xargs -r podman rm -f; echo "removed build leftovers"; else echo "no build leftovers"; fi
 

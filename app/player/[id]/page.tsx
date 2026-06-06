@@ -45,6 +45,20 @@ export default async function PlayerPage({ params }: PlayerPageProps) {
                 .filter(Boolean)
                 .join(" · ")}
             </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs font-black uppercase">
+              <span className="border-2 border-foreground bg-background px-2 py-1">
+                {link.kind}
+              </span>
+              <span className="border-2 border-foreground bg-background px-2 py-1">
+                {link.browserPlayable ? "Plays in browser" : "External player"}
+              </span>
+              {link.subtitles.length ? (
+                <span className="border-2 border-foreground bg-background px-2 py-1">
+                  {link.subtitles.length} subtitle
+                  {link.subtitles.length === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </div>
           </section>
 
           <VideoPlayer
@@ -52,6 +66,7 @@ export default async function PlayerPage({ params }: PlayerPageProps) {
             kind={link.kind}
             linkId={link.id}
             mimeType={link.mimeType}
+            subtitles={link.subtitles}
             url={link.url}
           />
         </>

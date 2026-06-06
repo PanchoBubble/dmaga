@@ -81,8 +81,12 @@ services:
       - .:/app
       # Keep container-managed build artefacts out of the host bind mount so a
       # host-built (and platform-mismatched) cache can't corrupt the container.
-      - /app/node_modules
-      - /app/.next
+      # NAMED (not anonymous) so a recreate reuses one volume instead of
+      # orphaning a fresh ~720MB node_modules copy every time — that pile-up was
+      # what filled the VM disk. `make rebuild` drops them to refresh on dep
+      # changes; a plain restart keeps them for a fast, no-reinstall start.
+      - app-node-modules:/app/node_modules
+      - app-next:/app/.next
       - downloads:/downloads
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
@@ -122,7 +126,9 @@ services:
       HOST_DOWNLOAD_DIR: /downloads
     volumes:
       - .:/app
-      - /app/node_modules
+      # Named (not anonymous) — see the app service for why. Its own volume so
+      # the two services don't share a node_modules mount.
+      - poller-node-modules:/app/node_modules
       - downloads:/downloads
     depends_on:
       postgres:
@@ -193,3 +199,8 @@ volumes:
   postgres-data:
   redis-data:
   downloads:
+  # Build artefacts the container manages (shadowing the host bind mount).
+  # Named so recreates reuse them; `make rebuild` removes them to refresh.
+  app-node-modules:
+  app-next:
+  poller-node-modules:

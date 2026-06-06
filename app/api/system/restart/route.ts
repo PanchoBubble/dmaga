@@ -7,13 +7,16 @@ export const dynamic = "force-dynamic";
 const RESTART_DELAY_MS = 600;
 
 /**
- * Restarts the app by terminating the `next dev` process. PID 1 (pnpm) exits
- * once its child dies, and compose's `restart: unless-stopped` policy brings the
- * container back up — re-reading next.config.ts, env, etc.
+ * Restarts the app by terminating the `next` CLI process. Its parent (pnpm)
+ * exits once the child dies, the container's init follows, and compose's
+ * `restart: unless-stopped` policy brings everything back up — re-reading
+ * next.config.ts, env, etc.
  *
  * We deliberately do NOT signal PID 1 directly: the kernel ignores signals sent
  * to a namespace's init process from within that namespace unless init installed
- * a handler, so killing the child is the reliable path.
+ * a handler, so killing the dev server is the reliable path. Note PID 1 is not
+ * necessarily pnpm — podman injects `podman-init` as PID 1, making the tree
+ * podman-init → pnpm → next, so we can't assume next is a direct child of PID 1.
  */
 function inContainer(): boolean {
   return existsSync("/run/.containerenv") || existsSync("/.dockerenv");
@@ -39,14 +42,19 @@ function ppidOf(pid: number): number | null {
   }
 }
 
-/** Direct children of PID 1 that look like the Next dev server. */
+/**
+ * Processes running the Next CLI launcher (`next dev` / `next start`). We match
+ * the launcher path specifically so we skip the `next-server` fork and the
+ * `.next/dev/build` worker, and we scan the whole tree rather than only direct
+ * children of PID 1 — under podman-init the launcher is a grandchild of PID 1.
+ */
 function devServerPids(): number[] {
   const pids: number[] = [];
   for (const entry of readdirSync("/proc")) {
     if (!/^\d+$/.test(entry)) continue;
     const pid = Number(entry);
-    if (pid <= 1 || ppidOf(pid) !== 1) continue;
-    if (cmdlineOf(pid).includes("/next/")) {
+    if (pid <= 1) continue;
+    if (cmdlineOf(pid).includes("/next/dist/bin/next")) {
       pids.push(pid);
     }
   }

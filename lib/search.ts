@@ -1,4 +1,4 @@
-import type { MediaCategory } from "@/lib/mock-media";
+import type { FilterableMediaCategory, MediaCategory } from "@/lib/mock-media";
 
 /**
  * Real-Debrid availability of a search result, when we can determine it.
@@ -137,11 +137,33 @@ const categoryTorznabIds: Record<Exclude<MediaCategory, "all">, string[]> = {
   movies: ["2000"],
   tv: ["5000"],
   anime: ["5070"],
+  manga: ["7030"],
   games: ["1000", "4050"],
+  music: ["3000"],
 };
 
 export function torznabCategoriesFor(category: MediaCategory): string[] {
   return category === "all" ? [] : categoryTorznabIds[category];
+}
+
+/**
+ * Maps a multi-select category scope onto the union of its Torznab ids. A
+ * `null` scope (the "all" sentinel) returns no ids so each indexer falls back
+ * to its own defaults; ids are de-duplicated since buckets can overlap.
+ */
+export function torznabCategoriesForSelection(
+  categories: FilterableMediaCategory[] | null,
+): string[] {
+  if (!categories || categories.length === 0) {
+    return [];
+  }
+  const ids = new Set<string>();
+  for (const category of categories) {
+    for (const id of categoryTorznabIds[category]) {
+      ids.add(id);
+    }
+  }
+  return [...ids];
 }
 
 /**

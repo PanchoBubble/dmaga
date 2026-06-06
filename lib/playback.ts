@@ -4,7 +4,7 @@
  * place. No server-only imports here — this is bundled into the browser.
  */
 
-export type PlaybackKind = "video" | "audio" | "other";
+export type PlaybackKind = "video" | "audio" | "subtitle" | "other";
 
 export type PlaybackInfo = {
   kind: PlaybackKind;
@@ -60,6 +60,15 @@ const EXTERNAL_AUDIO: Record<string, string> = {
   dts: "audio/vnd.dts",
 };
 
+/** Sidecar subtitle formats often bundled alongside video in a torrent pack. */
+const SUBTITLE: Record<string, string> = {
+  srt: "application/x-subrip",
+  vtt: "text/vtt",
+  ass: "text/x-ssa",
+  ssa: "text/x-ssa",
+  sub: "text/plain",
+};
+
 function extensionOf(fileName: string): string | null {
   const match = /\.([a-z0-9]+)\s*$/i.exec(fileName.trim());
   return match ? match[1].toLowerCase() : null;
@@ -109,6 +118,14 @@ export function classifyPlayback(
       extension,
     };
   }
+  if (extension && extension in SUBTITLE) {
+    return {
+      kind: "subtitle",
+      browserPlayable: false,
+      mimeType: mimeType ?? SUBTITLE[extension],
+      extension,
+    };
+  }
 
   return {
     kind: "other",
@@ -120,5 +137,68 @@ export function classifyPlayback(
 
 /** Whether a file is media we can offer a Play action for (web player or handoff). */
 export function isPlayableMedia(fileName: string, mimeType?: string | null): boolean {
-  return classifyPlayback(fileName, mimeType).kind !== "other";
+  const { kind } = classifyPlayback(fileName, mimeType);
+  return kind === "video" || kind === "audio";
+}
+
+/** Whether a file is a sidecar subtitle we can attach to a video as a track. */
+export function isSubtitleFile(fileName: string, mimeType?: string | null): boolean {
+  return classifyPlayback(fileName, mimeType).kind === "subtitle";
+}
+
+/** ISO 639-1/639-2 codes → human label, for subtitle filename language detection. */
+const SUBTITLE_LANGUAGES: Record<string, { lang: string; label: string }> = {
+  en: { lang: "en", label: "English" },
+  eng: { lang: "en", label: "English" },
+  english: { lang: "en", label: "English" },
+  es: { lang: "es", label: "Spanish" },
+  spa: { lang: "es", label: "Spanish" },
+  spanish: { lang: "es", label: "Spanish" },
+  fr: { lang: "fr", label: "French" },
+  fre: { lang: "fr", label: "French" },
+  fra: { lang: "fr", label: "French" },
+  french: { lang: "fr", label: "French" },
+  de: { lang: "de", label: "German" },
+  ger: { lang: "de", label: "German" },
+  deu: { lang: "de", label: "German" },
+  german: { lang: "de", label: "German" },
+  it: { lang: "it", label: "Italian" },
+  ita: { lang: "it", label: "Italian" },
+  italian: { lang: "it", label: "Italian" },
+  pt: { lang: "pt", label: "Portuguese" },
+  por: { lang: "pt", label: "Portuguese" },
+  ru: { lang: "ru", label: "Russian" },
+  rus: { lang: "ru", label: "Russian" },
+  ja: { lang: "ja", label: "Japanese" },
+  jpn: { lang: "ja", label: "Japanese" },
+  zh: { lang: "zh", label: "Chinese" },
+  chi: { lang: "zh", label: "Chinese" },
+  zho: { lang: "zh", label: "Chinese" },
+  ko: { lang: "ko", label: "Korean" },
+  kor: { lang: "ko", label: "Korean" },
+  ar: { lang: "ar", label: "Arabic" },
+  ara: { lang: "ar", label: "Arabic" },
+  nl: { lang: "nl", label: "Dutch" },
+  dut: { lang: "nl", label: "Dutch" },
+};
+
+/**
+ * Best-effort language guess for a subtitle filename. Looks at the dot- and
+ * bracket-delimited tokens before the extension (e.g. `Movie.en.srt`,
+ * `Movie.English.srt`, `Movie[eng].srt`). Falls back to the bare filename label
+ * when no known language token is present.
+ */
+export function guessSubtitleLanguage(fileName: string): {
+  lang: string | null;
+  label: string;
+} {
+  const base = fileName.replace(/\.[a-z0-9]+\s*$/i, "");
+  const tokens = base.toLowerCase().split(/[\s._\-[\]()]+/).filter(Boolean);
+  for (const token of tokens.reverse()) {
+    const match = SUBTITLE_LANGUAGES[token];
+    if (match) {
+      return match;
+    }
+  }
+  return { lang: null, label: "Subtitles" };
 }

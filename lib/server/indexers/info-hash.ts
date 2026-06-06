@@ -19,14 +19,18 @@ export function infoHashFromMagnet(magnetUrl: string | undefined): string | unde
   return normalizeHash(match?.[1]);
 }
 
-/** Builds a bare magnet URI from an info hash, attaching a `dn` display name. */
+/**
+ * Builds a bare magnet URI from an info hash, attaching a `dn` display name.
+ *
+ * Built by string concatenation rather than `URL`/`URLSearchParams`, which would
+ * percent-encode the `urn:btih:` colons (`xt=urn%3Abtih%3A…`) — a form
+ * Real-Debrid's magnet parser rejects with `wrong_parameter`. Only the `dn`
+ * value is encoded.
+ */
 export function magnetFromInfoHash(
   infoHash: string,
   title: string | undefined,
 ): string {
-  const url = new URL(`magnet:?xt=urn:btih:${infoHash}`);
-  if (title) {
-    url.searchParams.set("dn", title);
-  }
-  return url.toString();
+  const displayName = title ? `&dn=${encodeURIComponent(title)}` : "";
+  return `magnet:?xt=urn:btih:${infoHash}${displayName}`;
 }

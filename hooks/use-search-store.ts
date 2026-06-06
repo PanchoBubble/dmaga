@@ -1,10 +1,13 @@
 import { create } from "zustand";
 
-import type { MediaCategory } from "@/lib/mock-media";
+import {
+  filterableMediaCategories,
+  type FilterableMediaCategory,
+} from "@/lib/mock-media";
 import {
   dedupeByInfoHash,
   sortResults,
-  torznabCategoriesFor,
+  torznabCategoriesForSelection,
   type SearchIndexerError,
   type SearchResultDto,
   type SearchStreamEvent,
@@ -17,6 +20,12 @@ export type SearchStatus = "idle" | "loading" | "success" | "error";
 export type IndexerOption = { id: string; name: string };
 
 const SELECTED_INDEXERS_KEY = "dmaga:selected-indexers";
+const SELECTED_CATEGORIES_KEY = "dmaga:selected-categories";
+
+/** Canonical filterable category ids, for validating persisted selections. */
+const CATEGORY_IDS = new Set<FilterableMediaCategory>(
+  filterableMediaCategories.map((category) => category.id),
+);
 
 /**
  * Reads the persisted indexer scope. `null` (the default, also stored as the
@@ -53,9 +62,65 @@ function writeStoredSelection(selection: string[] | null): void {
   }
 }
 
+/**
+ * Reads the persisted category scope. `null` (the default, stored as "all")
+ * means every category; an array is an explicit narrowed subset. Unknown ids
+ * (e.g. a renamed category) are dropped so a stale store can't break search.
+ */
+function readStoredCategories(): FilterableMediaCategory[] | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(SELECTED_CATEGORIES_KEY);
+    if (!raw || raw === "all") {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+    const valid = parsed.filter(
+      (id): id is FilterableMediaCategory =>
+        typeof id === "string" && CATEGORY_IDS.has(id as FilterableMediaCategory),
+    );
+    // A subset covering everything collapses to "all". An empty selection is
+    // kept (it blocks search, mirroring an empty indexer scope), unless every
+    // stored id was stale, in which case there's nothing meaningful to restore.
+    if (valid.length === CATEGORY_IDS.size) {
+      return null;
+    }
+    if (valid.length === 0) {
+      return Array.isArray(parsed) && parsed.length === 0 ? [] : null;
+    }
+    return valid;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredCategories(selection: FilterableMediaCategory[] | null): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      SELECTED_CATEGORIES_KEY,
+      selection === null ? "all" : JSON.stringify(selection),
+    );
+  } catch {
+    // Best-effort persistence; falls back to in-memory state.
+  }
+}
+
 type SearchState = {
   query: string;
-  category: MediaCategory;
+  /**
+   * Pre-search category scope: which media categories the query is dispatched
+   * with. `null` means "all" (the default); a non-empty array is an explicit
+   * subset. Never empty — deselecting everything collapses back to "all".
+   */
+  selectedCategories: FilterableMediaCategory[] | null;
   status: SearchStatus;
   /** The query that produced the current results, for empty-state messaging. */
   lastQuery: string;
@@ -84,7 +149,7 @@ type SearchState = {
    */
   selectedIndexerIds: string[] | null;
   setQuery: (query: string) => void;
-  setCategory: (category: MediaCategory) => void;
+  setSelectedCategories: (ids: FilterableMediaCategory[] | null) => void;
   setIndexerFilter: (indexerName: string | null) => void;
   setSortKey: (sortKey: SortKey) => void;
   /**
@@ -103,7 +168,9 @@ let activeSearch: AbortController | null = null;
 
 export const useSearchStore = create<SearchState>((set, get) => ({
   query: "",
-  category: "all",
+  // SSR-safe default ("all"); the persisted value is restored client-side via
+  // hydrateSelection() after mount, mirroring the indexer scope.
+  selectedCategories: null,
   status: "idle",
   lastQuery: "",
   results: [],
@@ -121,7 +188,11 @@ export const useSearchStore = create<SearchState>((set, get) => ({
   selectedIndexerIds: null,
   setQuery: (query) => set({ query }),
   setIndexerFilter: (indexerName) => set({ indexerFilter: indexerName }),
-  hydrateSelection: () => set({ selectedIndexerIds: readStoredSelection() }),
+  hydrateSelection: () =>
+    set({
+      selectedIndexerIds: readStoredSelection(),
+      selectedCategories: readStoredCategories(),
+    }),
   setSortKey: (sortKey) =>
     // Re-sort what's already loaded; streaming batches use the same key.
     set((state) => ({ sortKey, results: sortResults(state.results, sortKey) })),
@@ -173,11 +244,17 @@ export const useSearchStore = create<SearchState>((set, get) => ({
       void get().runSearch();
     }
   },
-  setCategory: (category) => {
-    set({ category });
-    // Re-run with the new category filter if we've already searched, so tapping
-    // a chip updates results immediately instead of appearing to do nothing.
-    if (get().lastQuery) {
+  setSelectedCategories: (ids) => {
+    // Normalize "everything selected" to the null ("all") sentinel so the count
+    // badge and persisted value stay canonical. An empty array is preserved as
+    // an explicit "none" that blocks search, mirroring the indexer scope.
+    const normalized =
+      ids !== null && ids.length === CATEGORY_IDS.size ? null : ids;
+    set({ selectedCategories: normalized });
+    writeStoredCategories(normalized);
+    // Re-run immediately so applying a filter updates results without a second
+    // manual search — but never when the scope is empty (nothing to search).
+    if (get().lastQuery && !(normalized && normalized.length === 0)) {
       void get().runSearch();
     }
   },
@@ -197,10 +274,14 @@ export const useSearchStore = create<SearchState>((set, get) => ({
       return;
     }
 
-    // An explicit empty scope means the user deselected every indexer; there is
-    // nothing to query, so bail without touching the existing results.
+    // An explicit empty scope means the user deselected every indexer (or every
+    // category); there is nothing to query, so bail without touching results.
     const scope = get().selectedIndexerIds;
     if (scope && scope.length === 0) {
+      return;
+    }
+    const categoryScope = get().selectedCategories;
+    if (categoryScope && categoryScope.length === 0) {
       return;
     }
 
@@ -223,7 +304,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
     });
 
     const params = new URLSearchParams({ q: query });
-    for (const category of torznabCategoriesFor(get().category)) {
+    for (const category of torznabCategoriesForSelection(get().selectedCategories)) {
       params.append("cat", category);
     }
     // Only narrow when the user has an explicit subset; `null` lets the server

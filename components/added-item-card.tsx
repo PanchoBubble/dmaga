@@ -22,6 +22,7 @@ import {
   type AddedItemDto,
   type AddedItemLinkDto,
 } from "@/lib/debrid";
+import { classifyPlayback, type PlaybackKind } from "@/lib/playback";
 import { formatBytes, formatRelativeAge } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +37,9 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  // Tracked so the open card can lift into its own stacking context — otherwise
+  // the next card (a later grid item) paints over the dropdown menu.
+  const [menuOpen, setMenuOpen] = useState(false);
   const isReady = item.status === "ready";
   const isActive = isActiveDebridStatus(item.status);
   const isRemoved = item.status === "deleted";
@@ -45,7 +49,9 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
   const streamableLinks = downloadLinks.filter((link) => link.streamable);
   const primaryStreamLink = streamableLinks[0];
 
-  async function runAction(action: "remove_local" | "delete_from_debrid") {
+  async function runAction(
+    action: "remove_local" | "delete_from_debrid" | "resolve_links",
+  ) {
     setPendingAction(action);
     setError(null);
 
@@ -98,6 +104,7 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
       className={cn(
         "flex flex-col border-2 border-foreground bg-card p-3 shadow-line sm:p-4",
         isRemoved && "opacity-70",
+        menuOpen && "relative z-40",
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -111,14 +118,34 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
         </div>
         <div className="flex shrink-0 items-start gap-2">
           <StatusBadge item={item} />
-          <details className="group relative">
+          <details
+            className="group relative"
+            onToggle={(event) => setMenuOpen(event.currentTarget.open)}
+          >
             <summary
               aria-label="Added item actions"
               className="inline-flex size-10 cursor-pointer list-none items-center justify-center border-2 border-foreground bg-background text-foreground shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
             >
               <MoreHorizontal className="size-5" />
             </summary>
-            <div className="absolute right-0 z-20 mt-2 w-56 border-2 border-foreground bg-popover p-1 shadow-line">
+            <div className="absolute right-0 z-50 mt-2 w-56 border-2 border-foreground bg-popover p-1 shadow-line">
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+                disabled={!isReady || !downloadLinks.length || Boolean(pendingHostDownloadId)}
+                onClick={() => {
+                  if (downloadLinks[0]) {
+                    void queueHostDownload(downloadLinks[0]);
+                  }
+                }}
+                type="button"
+              >
+                {pendingHostDownloadId ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <ArrowDownToLine className="size-4" />
+                )}
+                {pendingHostDownloadId ? "Queueing host download" : "Host download"}
+              </button>
               <button
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
                 disabled={Boolean(pendingAction) || isRemoved}
@@ -182,74 +209,54 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
       ) : null}
 
       {isReady && downloadLinks.length ? (
-        <div className="mt-3 space-y-2">
-          {downloadLinks.slice(0, 3).map((link) => (
-            <div className="w-full px-3" key={link.id}>
-              <div className="flex w-full gap-2">
-                <Button
-                  asChild
-                  className="min-w-0 flex-1 justify-between px-3"
-                  variant="outline"
-                >
-                  <a
-                    href={link.unrestrictedLink ?? link.originalLink}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <span className="truncate">{link.fileName}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatBytes(link.fileSizeBytes ?? undefined)}
-                    </span>
-                  </a>
-                </Button>
-                {link.streamable ? (
-                  <Button
-                    asChild
-                    aria-label={`Play ${link.fileName}`}
-                    size="icon"
-                    variant="outline"
-                  >
-                    <Link href={`/player/${link.id}`}>
-                      <Play className="size-4" />
-                    </Link>
-                  </Button>
-                ) : null}
-              </div>
-              {link.hostDownload ? (
-                <p className="mt-1 text-xs font-bold text-muted-foreground">
-                  Host download: {hostDownloadLabel(link)}
-                </p>
-              ) : null}
-            </div>
-          ))}
+        <div className="mt-3">
+          <p className="mb-2 text-[10px] font-black uppercase text-muted-foreground">
+            Files ({downloadLinks.length})
+          </p>
+          <div
+            className={cn(
+              "space-y-2",
+              downloadLinks.length > 4 &&
+                "max-h-64 overflow-y-auto border-2 border-foreground bg-background p-2",
+            )}
+          >
+            {sortPackFiles(downloadLinks).map((link) => (
+              <PackFileRow key={link.id} link={link} />
+            ))}
+          </div>
         </div>
       ) : null}
 
       <div className="mt-auto flex flex-wrap justify-end gap-2 pt-4">
-        <Button
-          disabled={!isReady || !downloadLinks.length || Boolean(pendingHostDownloadId)}
-          onClick={() => {
-            if (downloadLinks[0]) {
-              void queueHostDownload(downloadLinks[0]);
-            }
-          }}
-          variant="outline"
-        >
-          <ArrowDownToLine className="size-4" />
-          {pendingHostDownloadId ? "Queueing" : "Host download"}
-        </Button>
-        {isReady && downloadLinks.length ? (
+        {!isReady ? (
+          <Button disabled>{debridStatusLabel(item.status)}</Button>
+        ) : downloadLinks.length ? (
           <Button asChild variant="outline">
             <a
-              href={downloadLinks[0].unrestrictedLink ?? downloadLinks[0].originalLink}
+              href={`/api/debrid/links/${downloadLinks[0].id}/download`}
               rel="noreferrer"
               target="_blank"
             >
               <Download className="size-4" />
-              Open link
+              Download
             </a>
           </Button>
-        ) : null}
+        ) : (
+          // Ready but links not resolved yet — pull them from Real-Debrid, then
+          // the file rows and per-file Download/Play appear on refresh.
+          <Button
+            disabled={Boolean(pendingAction)}
+            onClick={() => void runAction("resolve_links")}
+            variant="outline"
+          >
+            {pendingAction === "resolve_links" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            {pendingAction === "resolve_links" ? "Loading" : "Download"}
+          </Button>
+        )}
         {isReady && primaryStreamLink ? (
           <Button asChild>
             <Link href={`/player/${primaryStreamLink.id}`}>
@@ -257,11 +264,102 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
               Play
             </Link>
           </Button>
-        ) : !isReady ? (
-          <Button disabled>{debridStatusLabel(item.status)}</Button>
         ) : null}
       </div>
     </article>
+  );
+}
+
+/** Display rank per kind so playable media floats above subtitles/other files. */
+const KIND_RANK: Record<PlaybackKind, number> = {
+  video: 0,
+  audio: 1,
+  subtitle: 2,
+  other: 3,
+};
+
+/** Orders a pack's files by kind (playable first), then largest first. */
+function sortPackFiles(links: AddedItemLinkDto[]): AddedItemLinkDto[] {
+  return [...links].sort((a, b) => {
+    const rankDelta =
+      KIND_RANK[classifyPlayback(a.fileName).kind] -
+      KIND_RANK[classifyPlayback(b.fileName).kind];
+    if (rankDelta !== 0) {
+      return rankDelta;
+    }
+    return (b.fileSizeBytes ?? 0) - (a.fileSizeBytes ?? 0);
+  });
+}
+
+const KIND_BADGE_LABEL: Record<PlaybackKind, string> = {
+  video: "Video",
+  audio: "Audio",
+  subtitle: "Subs",
+  other: "File",
+};
+
+function FileKindBadge({ fileName }: { fileName: string }) {
+  const { kind, browserPlayable } = classifyPlayback(fileName);
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black uppercase",
+        kind === "video" && "bg-accent text-accent-foreground",
+        kind === "audio" && "bg-secondary text-secondary-foreground",
+        kind === "subtitle" && "bg-muted text-muted-foreground",
+        kind === "other" && "bg-background text-muted-foreground",
+      )}
+      title={
+        kind === "video" || kind === "audio"
+          ? browserPlayable
+            ? "Plays in browser"
+            : "Needs external player (VLC)"
+          : undefined
+      }
+    >
+      {KIND_BADGE_LABEL[kind]}
+      {(kind === "video" || kind === "audio") && !browserPlayable ? " · VLC" : ""}
+    </span>
+  );
+}
+
+function PackFileRow({ link }: { link: AddedItemLinkDto }) {
+  return (
+    <div className="w-full">
+      <div className="flex w-full items-stretch gap-2">
+        <Button
+          asChild
+          className="min-w-0 flex-1 justify-between gap-2 px-3"
+          variant="outline"
+        >
+          <a
+            href={`/api/debrid/links/${link.id}/download`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <FileKindBadge fileName={link.fileName} />
+              <span className="truncate">{link.fileName}</span>
+            </span>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {formatBytes(link.fileSizeBytes ?? undefined)}
+            </span>
+          </a>
+        </Button>
+        {link.streamable ? (
+          <Button asChild aria-label={`Play ${link.fileName}`} size="icon" variant="outline">
+            <Link href={`/player/${link.id}`}>
+              <Play className="size-4" />
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+      {link.hostDownload ? (
+        <p className="mt-1 text-xs font-bold text-muted-foreground">
+          Host download: {hostDownloadLabel(link)}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -280,29 +378,59 @@ function hostDownloadLabel(link: AddedItemLinkDto) {
   return download.status[0].toUpperCase() + download.status.slice(1);
 }
 
+/**
+ * A 40px square status indicator sized to match the actions (3-dots) button:
+ * a check when ready, the live progress % while Real-Debrid pulls the asset,
+ * an alert on error, and a spinner for other in-flight states.
+ */
 function StatusBadge({ item }: { item: AddedItemDto }) {
   const isActive = isActiveDebridStatus(item.status);
+  const square =
+    "inline-flex size-10 shrink-0 items-center justify-center border-2 border-foreground text-xs font-black tabular-nums shadow-line";
 
-  const tone = cn(
-    "inline-flex w-fit items-center gap-2 border-2 border-foreground px-2 py-1 text-xs font-black",
-    item.status === "ready" && "bg-secondary text-secondary-foreground",
-    item.status === "error" && "bg-destructive text-destructive-foreground",
-    isActive && "bg-accent text-accent-foreground",
-  );
+  if (item.status === "ready") {
+    return (
+      <span
+        className={cn(square, "bg-secondary text-secondary-foreground")}
+        title={debridStatusLabel(item.status)}
+      >
+        <CheckCircle2 className="size-5" />
+      </span>
+    );
+  }
 
-  const Icon =
-    item.status === "ready"
-      ? CheckCircle2
-      : item.status === "error"
-        ? AlertTriangle
-        : isActive
-          ? Loader2
-          : ArrowDownToLine;
+  if (item.status === "error") {
+    return (
+      <span
+        className={cn(square, "bg-destructive text-destructive-foreground")}
+        title={item.errorMessage ?? debridStatusLabel(item.status)}
+      >
+        <AlertTriangle className="size-5" />
+      </span>
+    );
+  }
+
+  if (isActive) {
+    return (
+      <span
+        className={cn(square, "bg-accent text-accent-foreground")}
+        title={`${debridStatusLabel(item.status)} — ${item.progress}%`}
+      >
+        {item.progress > 0 ? (
+          `${item.progress}%`
+        ) : (
+          <Loader2 className="size-5 animate-spin" />
+        )}
+      </span>
+    );
+  }
 
   return (
-    <span className={tone}>
-      <Icon className={cn("size-4", isActive && "animate-spin")} />
-      {debridStatusLabel(item.status)}
+    <span
+      className={cn(square, "bg-background text-foreground")}
+      title={debridStatusLabel(item.status)}
+    >
+      <ArrowDownToLine className="size-5" />
     </span>
   );
 }

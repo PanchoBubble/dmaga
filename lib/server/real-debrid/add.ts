@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { debridItems } from "@/lib/db/schema";
+import { debridItems, debridLinks } from "@/lib/db/schema";
 import {
   type AddToDebridRequest,
   type AddToDebridResponse,
@@ -14,7 +14,7 @@ import {
 } from "@/lib/server/real-debrid/auth-service";
 import { RealDebridClient } from "@/lib/server/real-debrid/client";
 import { toAvailability } from "@/lib/server/real-debrid/availability";
-import { enqueueDebridPolling } from "@/lib/server/real-debrid/poller";
+import { enqueueDebridPolling, refreshDebridLinks } from "@/lib/server/real-debrid/poller";
 import type {
   RealDebridTorrent,
   RealDebridTorrentStatus,
@@ -53,8 +53,13 @@ export async function addSearchResultToDebrid(
   const mediaItem = await upsertMediaItem(input, infoHash);
   const existing = await findDebridItem(mediaItem.id);
 
-  // Already downloadable or actively working — don't re-add.
+  // Already downloadable or actively working — don't re-add. If a ready item is
+  // missing its links (e.g. added before they were created, or the poller never
+  // ran), backfill them now so re-clicking Add surfaces Play/Download.
   if (existing && existing.status !== "error" && existing.status !== "deleted") {
+    if (existing.status === "ready" && existing.realDebridTorrentId) {
+      await backfillLinksIfMissing(existing.id, existing.realDebridTorrentId);
+    }
     return toResponse(mediaItem.id, existing, true);
   }
 
@@ -96,7 +101,15 @@ export async function addSearchResultToDebrid(
     completedAt: status === "ready" ? new Date() : null,
   });
 
-  if (status !== "error") {
+  // A cached torrent is often already "downloaded" at add time; create its links
+  // now so the Added page shows Play/Download immediately instead of waiting for
+  // the background poller. Fall back to polling if links aren't ready yet.
+  if (status === "ready") {
+    const linkCount = await refreshDebridLinks(saved.id, torrent, client);
+    if (linkCount === 0) {
+      await enqueueDebridPolling(saved.id);
+    }
+  } else if (status !== "error") {
     await enqueueDebridPolling(saved.id);
   }
 
@@ -131,6 +144,34 @@ async function selectFilesWhenReady(
   }
 
   return torrent;
+}
+
+/**
+ * Ensures a ready item has its {@link debridLinks}, creating them from the
+ * Real-Debrid torrent if absent. No-op when links already exist or the torrent
+ * is gone. Best-effort — failures don't block returning the reused item.
+ */
+async function backfillLinksIfMissing(
+  debridItemId: string,
+  torrentId: string,
+): Promise<void> {
+  const [{ value: linkCount } = { value: 0 }] = await db
+    .select({ value: count() })
+    .from(debridLinks)
+    .where(eq(debridLinks.debridItemId, debridItemId));
+
+  if (linkCount > 0) {
+    return;
+  }
+
+  try {
+    const client = await createAuthenticatedRealDebridClient();
+    const torrent = await client.getTorrent(torrentId);
+    await refreshDebridLinks(debridItemId, torrent, client);
+  } catch {
+    // Leave links empty; the Added page still shows the item, and a later
+    // poll or re-add can fill them in.
+  }
 }
 
 type DebridItemRow = typeof debridItems.$inferSelect;
