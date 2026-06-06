@@ -8,6 +8,13 @@
       "when": 1780745932161,
       "tag": "0000_sloppy_thundra",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780748402503,
+      "tag": "0001_sparkling_frightful_four",
+      "breakpoints": true
     }
   ]
 }

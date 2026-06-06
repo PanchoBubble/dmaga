@@ -61,6 +61,8 @@ export const realDebridAccounts = pgTable("real_debrid_accounts", {
   email: text("email"),
   encryptedAccessToken: text("encrypted_access_token"),
   encryptedRefreshToken: text("encrypted_refresh_token"),
+  encryptedOAuthClientId: text("encrypted_oauth_client_id"),
+  encryptedOAuthClientSecret: text("encrypted_oauth_client_secret"),
   accessTokenExpiresAt: timestamp("access_token_expires_at", {
     withTimezone: true,
   }),

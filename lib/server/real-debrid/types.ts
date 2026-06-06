@@ -75,6 +75,11 @@ export type RealDebridDeviceCodeResponse = {
   verification_url: string;
 };
 
+export type RealDebridDeviceCredentialsResponse = {
+  client_id: string;
+  client_secret: string;
+};
+
 export type RealDebridTokenResponse = {
   access_token: string;
   expires_in: number;

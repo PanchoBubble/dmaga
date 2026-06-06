@@ -7,7 +7,13 @@ import { env } from "@/lib/server/env";
 import { RealDebridClient } from "@/lib/server/real-debrid/client";
 import { RealDebridOAuthClient } from "@/lib/server/real-debrid/oauth";
 
+const publicRealDebridClientId = "X245A4XAIBGVM";
 const tokenRefreshSkewMs = 60_000;
+
+type OAuthCredentials = {
+  clientId: string;
+  clientSecret: string;
+};
 
 export class RealDebridAuthError extends Error {
   constructor(message: string) {
@@ -17,14 +23,14 @@ export class RealDebridAuthError extends Error {
 }
 
 export function createRealDebridOAuthClient() {
-  if (!env.REAL_DEBRID_CLIENT_ID) {
-    throw new Error("REAL_DEBRID_CLIENT_ID is required for Real-Debrid auth.");
-  }
-
   return new RealDebridOAuthClient({
-    clientId: env.REAL_DEBRID_CLIENT_ID,
+    clientId: env.REAL_DEBRID_CLIENT_ID ?? publicRealDebridClientId,
     clientSecret: env.REAL_DEBRID_CLIENT_SECRET,
   });
+}
+
+export function shouldCreateDeviceCredentials() {
+  return !env.REAL_DEBRID_CLIENT_SECRET;
 }
 
 export async function getLatestRealDebridAccount() {
@@ -58,12 +64,19 @@ export async function persistRealDebridTokens(input: {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
+  oauthCredentials?: OAuthCredentials;
 }) {
   const client = new RealDebridClient({ accessToken: input.accessToken });
   const user = await client.getUser();
   const expiresAt = new Date(Date.now() + input.expiresIn * 1000);
   const encryptedAccessToken = encryptSecret(input.accessToken);
   const encryptedRefreshToken = encryptSecret(input.refreshToken);
+  const encryptedOAuthClientId = input.oauthCredentials
+    ? encryptSecret(input.oauthCredentials.clientId)
+    : null;
+  const encryptedOAuthClientSecret = input.oauthCredentials
+    ? encryptSecret(input.oauthCredentials.clientSecret)
+    : null;
 
   const values = {
     accountId: String(user.id),
@@ -71,6 +84,8 @@ export async function persistRealDebridTokens(input: {
     email: user.email,
     encryptedAccessToken,
     encryptedRefreshToken,
+    encryptedOAuthClientId,
+    encryptedOAuthClientSecret,
     accessTokenExpiresAt: expiresAt,
     lastAuthenticatedAt: new Date(),
     updatedAt: new Date(),
@@ -115,8 +130,10 @@ export async function getFreshRealDebridAccessToken() {
   }
 
   const authClient = createRealDebridOAuthClient();
+  const oauthCredentials = getStoredOAuthCredentials(account);
   const token = await authClient.refreshAccessToken(
     decryptSecret(account.encryptedRefreshToken),
+    oauthCredentials,
   );
   const [updatedAccount] = await db
     .update(realDebridAccounts)
@@ -134,6 +151,54 @@ export async function getFreshRealDebridAccessToken() {
   }
 
   return decryptSecret(updatedAccount.encryptedAccessToken);
+}
+
+export async function exchangeRealDebridDeviceCode(deviceCode: string) {
+  const authClient = createRealDebridOAuthClient();
+  const oauthCredentials = shouldCreateDeviceCredentials()
+    ? await getAuthorizedDeviceCredentials(authClient, deviceCode)
+    : undefined;
+  const token = await authClient.exchangeDeviceCode(deviceCode, oauthCredentials);
+
+  return persistRealDebridTokens({
+    accessToken: token.access_token,
+    refreshToken: token.refresh_token,
+    expiresIn: token.expires_in,
+    oauthCredentials,
+  });
+}
+
+async function getAuthorizedDeviceCredentials(
+  authClient: RealDebridOAuthClient,
+  deviceCode: string,
+) {
+  const credentials = await authClient.getDeviceCredentials(deviceCode);
+
+  return {
+    clientId: credentials.client_id,
+    clientSecret: credentials.client_secret,
+  };
+}
+
+function getStoredOAuthCredentials(account: {
+  encryptedOAuthClientId: string | null;
+  encryptedOAuthClientSecret: string | null;
+}) {
+  if (env.REAL_DEBRID_CLIENT_ID && env.REAL_DEBRID_CLIENT_SECRET) {
+    return {
+      clientId: env.REAL_DEBRID_CLIENT_ID,
+      clientSecret: env.REAL_DEBRID_CLIENT_SECRET,
+    };
+  }
+
+  if (!account.encryptedOAuthClientId || !account.encryptedOAuthClientSecret) {
+    throw new RealDebridAuthError("Real-Debrid OAuth credentials are missing.");
+  }
+
+  return {
+    clientId: decryptSecret(account.encryptedOAuthClientId),
+    clientSecret: decryptSecret(account.encryptedOAuthClientSecret),
+  };
 }
 
 function isTokenExpiring(expiresAt: Date | null) {

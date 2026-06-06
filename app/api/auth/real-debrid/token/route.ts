@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import {
-  createRealDebridOAuthClient,
-  persistRealDebridTokens,
-} from "@/lib/server/real-debrid/auth-service";
+import { exchangeRealDebridDeviceCode } from "@/lib/server/real-debrid/auth-service";
 import { RealDebridOAuthError } from "@/lib/server/real-debrid/oauth";
 
 const requestSchema = z.object({
@@ -19,13 +16,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const authClient = createRealDebridOAuthClient();
-    const token = await authClient.exchangeDeviceCode(body.data.deviceCode);
-    const account = await persistRealDebridTokens({
-      accessToken: token.access_token,
-      refreshToken: token.refresh_token,
-      expiresIn: token.expires_in,
-    });
+    const account = await exchangeRealDebridDeviceCode(body.data.deviceCode);
 
     return NextResponse.json({
       linked: true,

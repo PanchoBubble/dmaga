@@ -1,4 +1,5 @@
 import type {
+  RealDebridDeviceCredentialsResponse,
   RealDebridDeviceCodeResponse,
   RealDebridErrorPayload,
   RealDebridTokenResponse,
@@ -13,6 +14,11 @@ type OAuthClientOptions = {
   clientSecret?: string;
   fetcher?: typeof fetch;
   rateLimiter?: RateLimiter;
+};
+
+type OAuthCredentials = {
+  clientId: string;
+  clientSecret?: string;
 };
 
 export class RealDebridOAuthError extends Error {
@@ -44,8 +50,12 @@ export class RealDebridOAuthClient {
     this.rateLimiter = rateLimiter;
   }
 
-  async createDeviceCode() {
+  async createDeviceCode(options: { newCredentials?: boolean } = {}) {
     const searchParams = new URLSearchParams({ client_id: this.clientId });
+
+    if (options.newCredentials) {
+      searchParams.set("new_credentials", "yes");
+    }
 
     return this.request<RealDebridDeviceCodeResponse>(
       `/device/code?${searchParams.toString()}`,
@@ -53,23 +63,37 @@ export class RealDebridOAuthClient {
     );
   }
 
-  async exchangeDeviceCode(deviceCode: string) {
-    return this.exchangeCode(deviceCode);
-  }
-
-  async refreshAccessToken(refreshToken: string) {
-    return this.exchangeCode(refreshToken);
-  }
-
-  private exchangeCode(code: string) {
-    const body = new URLSearchParams({
+  getDeviceCredentials(deviceCode: string) {
+    const searchParams = new URLSearchParams({
       client_id: this.clientId,
+      code: deviceCode,
+    });
+
+    return this.request<RealDebridDeviceCredentialsResponse>(
+      `/device/credentials?${searchParams.toString()}`,
+      { method: "GET" },
+    );
+  }
+
+  async exchangeDeviceCode(deviceCode: string, credentials?: OAuthCredentials) {
+    return this.exchangeCode(deviceCode, credentials);
+  }
+
+  async refreshAccessToken(refreshToken: string, credentials?: OAuthCredentials) {
+    return this.exchangeCode(refreshToken, credentials);
+  }
+
+  private exchangeCode(code: string, credentials?: OAuthCredentials) {
+    const body = new URLSearchParams({
+      client_id: credentials?.clientId ?? this.clientId,
       code,
       grant_type: deviceGrantType,
     });
 
-    if (this.clientSecret) {
-      body.set("client_secret", this.clientSecret);
+    const clientSecret = credentials?.clientSecret ?? this.clientSecret;
+
+    if (clientSecret) {
+      body.set("client_secret", clientSecret);
     }
 
     return this.request<RealDebridTokenResponse>("/token", {
