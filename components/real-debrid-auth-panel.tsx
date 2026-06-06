@@ -43,6 +43,7 @@ export function RealDebridAuthPanel({ initialStatus }: { initialStatus: AuthStat
   async function loadStatus() {
     const response = await fetch("/api/auth/real-debrid/status", {
       cache: "no-store",
+      signal: AbortSignal.timeout(2500),
     });
 
     if (!response.ok) {
@@ -56,6 +57,20 @@ export function RealDebridAuthPanel({ initialStatus }: { initialStatus: AuthStat
       setStep("linked");
     }
   }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadStatus().catch((statusError: unknown) => {
+        setError(
+          statusError instanceof Error ? statusError.message : "Status check failed.",
+        );
+      });
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     if (!deviceCode || step !== "waiting") {

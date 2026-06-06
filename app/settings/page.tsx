@@ -2,16 +2,11 @@ import { Plus, TestTube2 } from "lucide-react";
 
 import { RealDebridAuthPanel } from "@/components/real-debrid-auth-panel";
 import { Button } from "@/components/ui/button";
-import { getRealDebridAuthStatus } from "@/lib/server/real-debrid/auth-service";
 
-export const dynamic = "force-dynamic";
-
-export default async function SettingsPage() {
-  const realDebridStatus = await getRealDebridAuthStatus();
-
+export default function SettingsPage() {
   return (
     <div className="space-y-6">
-      <RealDebridAuthPanel initialStatus={realDebridStatus} />
+      <RealDebridAuthPanel initialStatus={{ linked: false }} />
 
       <section className="border-2 border-foreground bg-card p-4 shadow-line">
         <div className="flex items-center justify-between gap-4">

@@ -26,6 +26,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       try {
         const response = await fetch("/api/auth/real-debrid/status", {
           cache: "no-store",
+          signal: AbortSignal.timeout(2500),
         });
 
         if (!response.ok || ignore) {
