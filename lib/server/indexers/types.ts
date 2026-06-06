@@ -39,6 +39,17 @@ export type TorrentSearchParams = {
   limit?: number;
   /** Aborts the underlying fetch when the client cancels or disconnects. */
   signal?: AbortSignal;
+  /**
+   * Known IMDB id (`tt123`) for the search target. Id-aware adapters
+   * (Torrentio) use it to fetch exact streams and skip keyword resolution;
+   * keyword adapters (Torznab/Cardigann) ignore it and use {@link query}.
+   * Set by the title detail page, never by the free-text search box.
+   */
+  imdbId?: string;
+  /** Series season, paired with {@link episode}, for episode-level lookups. */
+  season?: number;
+  /** Series episode number, paired with {@link season}. */
+  episode?: number;
 };
 
 export type TorrentSearchResult = {

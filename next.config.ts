@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  images: {
+    // Cinemeta posters/backgrounds and episode thumbnails are served from
+    // metahub.space subdomains (images.metahub.space, episodes.metahub.space).
+    remotePatterns: [{ protocol: "https", hostname: "**.metahub.space" }],
+  },
 };
 
 export default nextConfig;

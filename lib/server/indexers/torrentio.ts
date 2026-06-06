@@ -87,11 +87,25 @@ function parseEpisode(query: string): {
   return { title, season: Number(match[1]), episode: Number(match[2]) };
 }
 
-/** Resolves the keyword query to a Torrentio movie/series target via Cinemeta. */
+/**
+ * Resolves the search target to a Torrentio movie/series id. When the caller
+ * already knows the IMDB id (title detail page), we build the target directly
+ * and skip the Cinemeta keyword lookup entirely — exact, no guessing. Otherwise
+ * we fall back to resolving the free-text query via Cinemeta.
+ */
 async function resolveTarget(
   config: IndexerConfig,
   params: TorrentSearchParams,
 ): Promise<ResolvedTarget | null> {
+  if (params.imdbId?.startsWith("tt")) {
+    return params.season != null && params.episode != null
+      ? {
+          type: "series",
+          videoId: `${params.imdbId}:${params.season}:${params.episode}`,
+        }
+      : { type: "movie", videoId: params.imdbId };
+  }
+
   const episode = parseEpisode(params.query);
   const cinemetaType = episode ? "series" : "movie";
   const title = episode ? episode.title : params.query;

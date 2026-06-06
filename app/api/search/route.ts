@@ -28,6 +28,13 @@ export async function GET(request: NextRequest) {
     .map((value) => value.trim())
     .filter(Boolean);
 
+  // Optional id-aware lookup (from the title detail page): an IMDB id plus
+  // optional season/episode lets id-aware adapters fetch exact streams. Keyword
+  // adapters ignore these and use `q`.
+  const imdbId = request.nextUrl.searchParams.get("imdbId")?.trim() || undefined;
+  const season = parsePositiveInt(request.nextUrl.searchParams.get("season"));
+  const episode = parsePositiveInt(request.nextUrl.searchParams.get("episode"));
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -37,7 +44,7 @@ export async function GET(request: NextRequest) {
 
       try {
         for await (const event of streamIndexerSearch(
-          { query, categories, limit: MAX_RESULTS },
+          { query, categories, limit: MAX_RESULTS, imdbId, season, episode },
           request.signal,
           indexerIds,
         )) {
@@ -65,4 +72,13 @@ export async function GET(request: NextRequest) {
       Connection: "keep-alive",
     },
   });
+}
+
+/** Parses a query param as a positive integer, else undefined. */
+function parsePositiveInt(value: string | null): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
