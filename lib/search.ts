@@ -186,6 +186,18 @@ export function magnetLinkFor(result: {
   return null;
 }
 
+export function isTorrentFileUrl(url: string | undefined): boolean {
+  if (!url) {
+    return false;
+  }
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname.toLowerCase().endsWith(".torrent");
+  } catch {
+    return url.toLowerCase().includes(".torrent");
+  }
+}
+
 const SIZE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"] as const;
 
 /** Formats a byte count as a human-readable string (binary units). */

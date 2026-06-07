@@ -27,6 +27,7 @@ export type AddToDebridRequest = {
   publishedAt?: string;
   indexerId?: string;
   indexerName: string;
+  /** Indexer-provided source. Can be a details page or a .torrent URL. */
   sourceUrl?: string;
 };
 

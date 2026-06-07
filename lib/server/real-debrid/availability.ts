@@ -60,3 +60,34 @@ export async function getDebridAvailabilityByInfoHash(
 
   return map;
 }
+
+export async function getDebridAvailabilityBySourceUrl(
+  sourceUrls: string[],
+): Promise<Map<string, DebridAvailability>> {
+  const unique = [...new Set(sourceUrls.filter(Boolean))];
+  if (unique.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db
+    .select({
+      sourceUrl: mediaItems.sourceUrl,
+      status: debridItems.status,
+    })
+    .from(debridItems)
+    .innerJoin(mediaItems, eq(debridItems.mediaItemId, mediaItems.id))
+    .where(inArray(mediaItems.sourceUrl, unique));
+
+  const map = new Map<string, DebridAvailability>();
+  for (const row of rows) {
+    if (!row.sourceUrl) {
+      continue;
+    }
+    const availability = toAvailability(row.status);
+    if (availability !== "unknown") {
+      map.set(row.sourceUrl, availability);
+    }
+  }
+
+  return map;
+}

@@ -1,4 +1,6 @@
 import { CardigannIndexerAdapter } from "@/lib/server/indexers/cardigann";
+import { InternetArchiveIndexerAdapter } from "@/lib/server/indexers/internet-archive";
+import { MinervaIndexerAdapter } from "@/lib/server/indexers/minerva";
 import { TorrentioIndexerAdapter } from "@/lib/server/indexers/torrentio";
 import { TorznabIndexerAdapter } from "@/lib/server/indexers/torznab";
 import {
@@ -14,6 +16,8 @@ import {
  */
 const adapters: Record<IndexerType, IndexerAdapter> = {
   cardigann: new CardigannIndexerAdapter(),
+  internet_archive: new InternetArchiveIndexerAdapter(),
+  minerva: new MinervaIndexerAdapter(),
   torznab: new TorznabIndexerAdapter(),
   torrentio: new TorrentioIndexerAdapter(),
 };

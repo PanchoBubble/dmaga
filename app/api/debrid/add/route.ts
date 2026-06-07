@@ -21,8 +21,8 @@ const addRequestSchema = z
     indexerName: z.string().min(1),
     sourceUrl: z.string().optional(),
   })
-  .refine((value) => Boolean(value.magnetUrl || value.infoHash), {
-    message: "A magnet link or info hash is required.",
+  .refine((value) => Boolean(value.magnetUrl || value.infoHash || value.sourceUrl), {
+    message: "A magnet link, info hash, or torrent source URL is required.",
   });
 
 export async function POST(request: NextRequest) {

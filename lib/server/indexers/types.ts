@@ -13,7 +13,12 @@ export type IndexerFetchMode = "direct" | "flaresolverr";
  * Adapter discriminator. `cardigann` is used for native public Prowlarr
  * definitions that the app can execute without a Torznab proxy.
  */
-export type IndexerType = "torznab" | "cardigann" | "torrentio";
+export type IndexerType =
+  | "torznab"
+  | "cardigann"
+  | "torrentio"
+  | "internet_archive"
+  | "minerva";
 
 export type IndexerConfig = {
   id: string;

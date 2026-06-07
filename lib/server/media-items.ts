@@ -60,6 +60,18 @@ export async function upsertMediaItem(
     }
   }
 
+  if (!infoHash && input.sourceUrl) {
+    const [existing] = await db
+      .select()
+      .from(mediaItems)
+      .where(eq(mediaItems.sourceUrl, input.sourceUrl))
+      .limit(1);
+
+    if (existing) {
+      return existing;
+    }
+  }
+
   const [created] = await db
     .insert(mediaItems)
     .values({

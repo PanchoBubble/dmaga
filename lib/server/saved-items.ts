@@ -91,6 +91,20 @@ export async function getSavedInfoHashes(
   return new Set(rows.map((row) => row.infoHash).filter((h): h is string => !!h));
 }
 
+export async function getSavedSourceUrls(sourceUrls: string[]): Promise<Set<string>> {
+  const unique = [...new Set(sourceUrls.filter(Boolean))];
+  if (unique.length === 0) {
+    return new Set();
+  }
+
+  const rows = await db
+    .select({ sourceUrl: mediaItems.sourceUrl })
+    .from(mediaItems)
+    .where(and(eq(mediaItems.saved, true), inArray(mediaItems.sourceUrl, unique)));
+
+  return new Set(rows.map((row) => row.sourceUrl).filter((url): url is string => !!url));
+}
+
 /** Counts saved torrents for the Saved nav badge. */
 export async function countSavedItems(): Promise<number> {
   const [row] = await db

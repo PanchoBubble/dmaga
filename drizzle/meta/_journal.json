@@ -57,6 +57,13 @@
       "when": 1780852885206,
       "tag": "0007_slippery_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780855439000,
+      "tag": "0008_archive_indexers",
+      "breakpoints": true
     }
   ]
 }

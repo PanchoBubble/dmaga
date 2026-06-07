@@ -68,6 +68,30 @@ const utilityIndexerPresets = [
       "Torrentio aggregates many torrent sources by IMDB id (resolved from your query via Cinemeta). Use SxxExx in the query for TV episodes.",
     requiresApiKey: false,
   },
+  {
+    presetKey: "internet-archive",
+    name: "Internet Archive",
+    type: "internet_archive",
+    baseUrl: "https://archive.org/",
+    fetchMode: "direct",
+    enabled: false,
+    categories: [],
+    description:
+      "Public Archive.org search using generated item torrent files when available.",
+    requiresApiKey: false,
+  },
+  {
+    presetKey: "minerva-archive",
+    name: "MiNERVA Archive",
+    type: "minerva",
+    baseUrl: "https://minerva-archive.org/",
+    fetchMode: "direct",
+    enabled: false,
+    categories: [],
+    description:
+      "Searches MiNERVA's public Myrient path index and links results to their ROM pages.",
+    requiresApiKey: false,
+  },
 ] satisfies Array<IndexerPreset & { type: IndexerType; fetchMode: IndexerFetchMode }>;
 
 const animeIndexerPresets = [

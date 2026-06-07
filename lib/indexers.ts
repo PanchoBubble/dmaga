@@ -1,5 +1,10 @@
 /** Indexer adapter kind. Mirrors the DB enum. */
-export type IndexerType = "torznab" | "cardigann" | "torrentio";
+export type IndexerType =
+  | "torznab"
+  | "cardigann"
+  | "torrentio"
+  | "internet_archive"
+  | "minerva";
 
 /** How an indexer's HTTP requests are fetched. Mirrors the DB enum. */
 export type IndexerFetchMode = "direct" | "flaresolverr";
@@ -56,6 +61,8 @@ export type IndexerTestResult = {
 
 export const INDEXER_TYPE_LABELS: Record<IndexerType, string> = {
   cardigann: "Cardigann",
+  internet_archive: "Internet Archive",
+  minerva: "MiNERVA",
   torznab: "Torznab",
   torrentio: "Torrentio",
 };

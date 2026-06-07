@@ -22,6 +22,7 @@ import { useSavedStore } from "@/hooks/use-saved-store";
 import {
   formatBytes,
   formatRelativeAge,
+  isTorrentFileUrl,
   magnetLinkFor,
   type DebridAvailability,
   type SearchResultDto,
@@ -71,7 +72,7 @@ export function TorrentResultCard({
   const isAdding = entry?.status === "adding";
   const isReady = availability === "ready";
   const magnetHref = magnetLinkFor(result);
-  const canAdd = Boolean(magnetHref);
+  const canAdd = Boolean(magnetHref || isTorrentFileUrl(result.sourceUrl));
 
   const badge =
     availability === "downloading" || availability === "saved"

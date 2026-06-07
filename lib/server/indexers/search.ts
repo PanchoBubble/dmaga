@@ -12,8 +12,11 @@ import {
   type TorrentSearchParams,
   type TorrentSearchResult,
 } from "@/lib/server/indexers/types";
-import { getDebridAvailabilityByInfoHash } from "@/lib/server/real-debrid/availability";
-import { getSavedInfoHashes } from "@/lib/server/saved-items";
+import {
+  getDebridAvailabilityByInfoHash,
+  getDebridAvailabilityBySourceUrl,
+} from "@/lib/server/real-debrid/availability";
+import { getSavedInfoHashes, getSavedSourceUrls } from "@/lib/server/saved-items";
 
 export type SearchIndexerFailure = {
   indexerId: string;
@@ -244,9 +247,15 @@ async function toDtosWithAvailability(
   const infoHashes = results
     .map((result) => result.infoHash)
     .filter((hash): hash is string => !!hash);
-  const [availability, savedHashes] = await Promise.all([
+  const sourceUrls = results
+    .map((result) => result.sourceUrl)
+    .filter((url): url is string => !!url);
+  const [availability, sourceAvailability, savedHashes, savedSourceUrls] =
+    await Promise.all([
     getDebridAvailabilityByInfoHash(infoHashes),
+    getDebridAvailabilityBySourceUrl(sourceUrls),
     getSavedInfoHashes(infoHashes),
+    getSavedSourceUrls(sourceUrls),
   ]);
 
   return results.map((result) => ({
@@ -261,8 +270,13 @@ async function toDtosWithAvailability(
     magnetUrl: result.magnetUrl,
     infoHash: result.infoHash,
     sourceUrl: result.sourceUrl,
-    debridState: (result.infoHash && availability.get(result.infoHash)) || "unknown",
-    saved: result.infoHash ? savedHashes.has(result.infoHash) : false,
+    debridState:
+      (result.infoHash && availability.get(result.infoHash)) ||
+      (result.sourceUrl && sourceAvailability.get(result.sourceUrl)) ||
+      "unknown",
+    saved:
+      (result.infoHash && savedHashes.has(result.infoHash)) ||
+      (result.sourceUrl ? savedSourceUrls.has(result.sourceUrl) : false),
   }));
 }
 

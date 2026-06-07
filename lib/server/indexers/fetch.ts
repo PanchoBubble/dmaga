@@ -64,6 +64,51 @@ export async function fetchIndexerText(
     : fetchDirect(config, url, timeoutMs, options);
 }
 
+export async function fetchIndexerBytes(
+  config: IndexerConfig,
+  url: string,
+  options: Pick<FetchOptions, "timeoutMs" | "signal"> = {},
+): Promise<Uint8Array> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const { signal, clear } = withTimeout(timeoutMs, options.signal);
+
+  try {
+    const response = await undiciFetch(url, {
+      signal,
+      dispatcher: indexerDispatcher(),
+      headers: {
+        Accept: "application/x-bittorrent, application/octet-stream, */*",
+      },
+    });
+
+    if (!response.ok) {
+      throw new IndexerError(`Indexer request failed with HTTP ${response.status}.`, {
+        indexerId: config.id,
+        indexerName: config.name,
+      });
+    }
+
+    return new Uint8Array(await response.arrayBuffer());
+  } catch (cause) {
+    if (cause instanceof IndexerError) {
+      throw cause;
+    }
+
+    const reason =
+      cause instanceof Error && cause.name === "AbortError"
+        ? `Indexer request timed out after ${timeoutMs}ms.`
+        : "Indexer request failed.";
+
+    throw new IndexerError(reason, {
+      indexerId: config.id,
+      indexerName: config.name,
+      cause,
+    });
+  } finally {
+    clear();
+  }
+}
+
 async function fetchDirect(
   config: IndexerConfig,
   url: string,

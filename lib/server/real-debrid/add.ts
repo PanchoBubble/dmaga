@@ -8,6 +8,7 @@ import {
   type DebridItemStatus,
 } from "@/lib/debrid";
 import { isReadableMangaFile } from "@/lib/manga";
+import { isTorrentFileUrl } from "@/lib/search";
 import { resolveInfoHash, upsertMediaItem } from "@/lib/server/media-items";
 import {
   createAuthenticatedRealDebridClient,
@@ -49,9 +50,13 @@ export async function addSearchResultToDebrid(
 ): Promise<AddToDebridResponse> {
   const infoHash = resolveInfoHash(input);
   const magnet = input.magnetUrl ?? buildMagnetUri(infoHash, input.title);
+  const sourceUrl = input.sourceUrl;
+  const torrentUrl = !magnet && sourceUrl && isTorrentFileUrl(sourceUrl) ? sourceUrl : null;
 
-  if (!magnet) {
-    throw new AddToDebridError("This result has no magnet link or info hash to add.");
+  if (!magnet && !torrentUrl) {
+    throw new AddToDebridError(
+      "This result has no magnet link, info hash, or .torrent URL to add.",
+    );
   }
 
   const mediaItem = await upsertMediaItem(input, infoHash);
@@ -82,7 +87,9 @@ export async function addSearchResultToDebrid(
 
   let torrent: RealDebridTorrent;
   try {
-    const { id: torrentId } = await client.addMagnet(magnet);
+    const { id: torrentId } = magnet
+      ? await client.addMagnet(magnet)
+      : await client.addTorrent(await downloadTorrentFile(torrentUrl));
     torrent = await selectFilesWhenReady(client, torrentId);
   } catch (error) {
     const message =
@@ -121,6 +128,23 @@ export async function addSearchResultToDebrid(
     ...(await toResponse(mediaItem.id, saved, false)),
     filename: torrent.filename,
   };
+}
+
+async function downloadTorrentFile(url: string | null): Promise<Blob> {
+  if (!url) {
+    throw new AddToDebridError("Missing .torrent URL.");
+  }
+
+  const response = await fetch(url, {
+    headers: { Accept: "application/x-bittorrent, application/octet-stream, */*" },
+  });
+  if (!response.ok) {
+    throw new AddToDebridError(`Failed to download torrent file (${response.status}).`);
+  }
+
+  return new Blob([await response.arrayBuffer()], {
+    type: response.headers.get("content-type") ?? "application/x-bittorrent",
+  });
 }
 
 /**

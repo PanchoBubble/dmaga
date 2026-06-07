@@ -17,8 +17,8 @@ const setSavedSchema = z
     sourceUrl: z.string().optional(),
     saved: z.boolean(),
   })
-  .refine((value) => Boolean(value.magnetUrl || value.infoHash), {
-    message: "A magnet link or info hash is required.",
+  .refine((value) => Boolean(value.magnetUrl || value.infoHash || value.sourceUrl), {
+    message: "A magnet link, info hash, or source URL is required.",
   });
 
 export async function POST(request: NextRequest) {

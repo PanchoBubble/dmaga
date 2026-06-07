@@ -10,6 +10,7 @@ export type SetSavedRequest = {
   publishedAt?: string;
   indexerId?: string;
   indexerName: string;
+  /** Indexer-provided source. Can be a details page or a .torrent URL. */
   sourceUrl?: string;
   /** Desired saved state: true to star, false to unstar. */
   saved: boolean;

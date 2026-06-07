@@ -17,6 +17,8 @@ export const indexerTypeEnum = pgEnum("indexer_type", [
   "torznab",
   "cardigann",
   "torrentio",
+  "internet_archive",
+  "minerva",
 ]);
 export const debridItemStatusEnum = pgEnum("debrid_item_status", [
   "saved",
