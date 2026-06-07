@@ -1,7 +1,12 @@
+import { DiscoverRows } from "@/components/discover-rows";
 import { DiscoverSearch } from "@/components/discover-search";
-import { MyAnimeListDiscoverSection } from "@/components/myanimelist-discover-section";
-import { PosterRow } from "@/components/poster-row";
+import type { DiscoverRow, DiscoverRowId } from "@/lib/discover";
 import { fetchCatalog } from "@/lib/server/metadata/cinemeta";
+import { listMyAnimeListAnime } from "@/lib/server/myanimelist/auth-service";
+import {
+  getDiscoverRowOrder,
+  visibleMyAnimeListStatuses,
+} from "@/lib/server/myanimelist/discover-preferences";
 
 export const metadata = {
   title: "Discover · dmaga",
@@ -16,12 +21,68 @@ export const dynamic = "force-dynamic";
  * horizontally-scrolling rows that link into the full per-type grids.
  */
 export default async function DiscoverPage() {
-  const [popularMovies, popularShows, newMovies, newShows] = await Promise.all([
-    fetchCatalog({ type: "movie", sort: "top" }),
-    fetchCatalog({ type: "series", sort: "top" }),
-    fetchCatalog({ type: "movie", sort: "year" }),
-    fetchCatalog({ type: "series", sort: "year" }),
-  ]);
+  const [popularMovies, popularShows, newMovies, newShows, discoverOrder, malRows] =
+    await Promise.all([
+      fetchCatalog({ type: "movie", sort: "top" }),
+      fetchCatalog({ type: "series", sort: "top" }),
+      fetchCatalog({ type: "movie", sort: "year" }),
+      fetchCatalog({ type: "series", sort: "year" }),
+      getDiscoverRowOrder(),
+      Promise.all(
+        visibleMyAnimeListStatuses.map(async (status) => {
+          try {
+            const items = await listMyAnimeListAnime(status.id, 12);
+            return {
+              id: `mal:${status.id}` as DiscoverRowId,
+              kind: "mal" as const,
+              title: status.label,
+              items,
+            };
+          } catch {
+            return {
+              id: `mal:${status.id}` as DiscoverRowId,
+              kind: "mal" as const,
+              title: status.label,
+              items: [],
+            };
+          }
+        }),
+      ),
+    ]);
+  const rows = sortRows(
+    [
+      ...malRows,
+      {
+        id: "catalog:popular-movies",
+        kind: "catalog",
+        title: "Popular Movies",
+        href: "/discover/movie",
+        items: popularMovies,
+      },
+      {
+        id: "catalog:popular-shows",
+        kind: "catalog",
+        title: "Popular Shows",
+        href: "/discover/series",
+        items: popularShows,
+      },
+      {
+        id: "catalog:new-movies",
+        kind: "catalog",
+        title: "New Movies",
+        href: "/discover/movie?sort=year",
+        items: newMovies,
+      },
+      {
+        id: "catalog:new-shows",
+        kind: "catalog",
+        title: "New Shows",
+        href: "/discover/series?sort=year",
+        items: newShows,
+      },
+    ],
+    discoverOrder,
+  );
 
   return (
     <div className="space-y-8">
@@ -34,16 +95,18 @@ export default async function DiscoverPage() {
       </header>
 
       <DiscoverSearch />
-      <MyAnimeListDiscoverSection />
-
-      <PosterRow href="/discover/movie" items={popularMovies} title="Popular Movies" />
-      <PosterRow href="/discover/series" items={popularShows} title="Popular Shows" />
-      <PosterRow
-        href="/discover/movie?sort=year"
-        items={newMovies}
-        title="New Movies"
-      />
-      <PosterRow href="/discover/series?sort=year" items={newShows} title="New Shows" />
+      <DiscoverRows initialRows={rows} />
     </div>
   );
+}
+
+function sortRows(rows: DiscoverRow[], order: DiscoverRowId[]) {
+  const orderIndex = new Map(order.map((rowId, index) => [rowId, index]));
+  return rows
+    .filter((row) => row.items.length > 0)
+    .sort(
+      (a, b) =>
+        (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+        (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    );
 }

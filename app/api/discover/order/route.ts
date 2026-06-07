@@ -1,25 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { discoverRowIds } from "@/lib/discover";
 import {
-  getMyAnimeListDiscoverOrder,
-  setMyAnimeListDiscoverOrder,
+  getDiscoverRowOrder,
+  setDiscoverRowOrder,
 } from "@/lib/server/myanimelist/discover-preferences";
 
 const orderSchema = z.object({
-  rowOrder: z.array(z.enum(["watching", "plan_to_watch"])),
+  rowOrder: z.array(z.enum(discoverRowIds)),
 });
 
 export async function GET() {
   try {
-    return NextResponse.json({ rowOrder: await getMyAnimeListDiscoverOrder() });
+    return NextResponse.json({ rowOrder: await getDiscoverRowOrder() });
   } catch (error) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Unable to read MyAnimeList row order.",
+          error instanceof Error ? error.message : "Unable to read Discover row order.",
       },
       { status: 500 },
     );
@@ -44,7 +43,7 @@ export async function POST(request: NextRequest) {
 
   try {
     return NextResponse.json({
-      rowOrder: await setMyAnimeListDiscoverOrder(parsed.data.rowOrder),
+      rowOrder: await setDiscoverRowOrder(parsed.data.rowOrder),
     });
   } catch (error) {
     return NextResponse.json(
@@ -52,7 +51,7 @@ export async function POST(request: NextRequest) {
         error:
           error instanceof Error
             ? error.message
-            : "Unable to update MyAnimeList row order.",
+            : "Unable to update Discover row order.",
       },
       { status: 500 },
     );

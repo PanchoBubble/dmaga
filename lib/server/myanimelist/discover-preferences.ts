@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import { myAnimeListDiscoverPreferences } from "@/lib/db/schema";
+import { discoverRowIds, type DiscoverRowId } from "@/lib/discover";
 import type { MyAnimeListStatus } from "@/lib/myanimelist";
 import { getLatestMyAnimeListAccount } from "@/lib/server/myanimelist/auth-service";
 
@@ -12,9 +13,9 @@ export const visibleMyAnimeListStatuses = [
   { id: "plan_to_watch", label: "MAL - Want to Watch" },
 ] as const satisfies Array<{ id: MyAnimeListStatus; label: string }>;
 
-const defaultOrder = visibleMyAnimeListStatuses.map((status) => status.id);
+const defaultDiscoverOrder = [...discoverRowIds];
 
-export async function getMyAnimeListDiscoverOrder(): Promise<MyAnimeListStatus[]> {
+export async function getDiscoverRowOrder(): Promise<DiscoverRowId[]> {
   const preferenceKey = await getPreferenceKey();
   const [row] = await db
     .select({ rowOrder: myAnimeListDiscoverPreferences.rowOrder })
@@ -22,14 +23,14 @@ export async function getMyAnimeListDiscoverOrder(): Promise<MyAnimeListStatus[]
     .where(eq(myAnimeListDiscoverPreferences.preferenceKey, preferenceKey))
     .limit(1);
 
-  return sanitizeOrder(row?.rowOrder);
+  return sanitizeDiscoverOrder(row?.rowOrder);
 }
 
-export async function setMyAnimeListDiscoverOrder(
+export async function setDiscoverRowOrder(
   rowOrder: string[],
-): Promise<MyAnimeListStatus[]> {
+): Promise<DiscoverRowId[]> {
   const preferenceKey = await getPreferenceKey();
-  const sanitized = sanitizeOrder(rowOrder);
+  const sanitized = sanitizeDiscoverOrder(rowOrder);
 
   await db
     .insert(myAnimeListDiscoverPreferences)
@@ -53,15 +54,15 @@ async function getPreferenceKey() {
   return account?.accountId ? `mal:${account.accountId}` : "mal:default";
 }
 
-function sanitizeOrder(rowOrder: string[] | undefined): MyAnimeListStatus[] {
-  const allowed = new Set<MyAnimeListStatus>(defaultOrder);
-  const next = (rowOrder ?? []).filter((status): status is MyAnimeListStatus =>
-    allowed.has(status as MyAnimeListStatus),
+function sanitizeDiscoverOrder(rowOrder: string[] | undefined): DiscoverRowId[] {
+  const allowed = new Set<DiscoverRowId>(defaultDiscoverOrder);
+  const next = (rowOrder ?? []).filter((rowId): rowId is DiscoverRowId =>
+    allowed.has(rowId as DiscoverRowId),
   );
 
-  for (const status of defaultOrder) {
-    if (!next.includes(status)) {
-      next.push(status);
+  for (const rowId of defaultDiscoverOrder) {
+    if (!next.includes(rowId)) {
+      next.push(rowId);
     }
   }
 
