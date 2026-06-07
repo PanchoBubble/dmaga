@@ -22,6 +22,7 @@ type RedisLockClient = {
     value: string,
     options: { NX: true; PX: number },
   ) => Promise<string | null>;
+  get?: (key: string) => Promise<string | null>;
   del: (key: string) => Promise<number>;
 };
 
@@ -92,13 +93,18 @@ export async function pollDueDebridItems({
 
   try {
     const jobs = await findDueJobs(now, limit);
-    const client = await createAuthenticatedRealDebridClient();
     const summary: PollSummary = {
       checked: 0,
       completed: 0,
       rescheduled: 0,
       failed: 0,
     };
+
+    if (jobs.length === 0) {
+      return summary;
+    }
+
+    const client = await createAuthenticatedRealDebridClient();
 
     for (const job of jobs) {
       summary.checked += 1;
@@ -109,9 +115,20 @@ export async function pollDueDebridItems({
     return summary;
   } finally {
     if (redis) {
-      await redis.del(lockKey);
+      await releaseLock(redis, lockKey, lockToken);
     }
   }
+}
+
+async function releaseLock(redis: RedisLockClient, lockKey: string, lockToken: string) {
+  if (redis.get) {
+    const currentToken = await redis.get(lockKey);
+    if (currentToken !== lockToken) {
+      return;
+    }
+  }
+
+  await redis.del(lockKey);
 }
 
 async function findDueJobs(now: Date, limit: number) {
@@ -242,15 +259,13 @@ export async function refreshDebridLinks(
     return 0;
   }
 
-  const unrestricted = await Promise.all(
-    links.map(async (link) => {
-      try {
-        return { originalLink: link, response: await client.unrestrictLink(link) };
-      } catch {
-        return { originalLink: link, response: null };
-      }
-    }),
-  );
+  const unrestricted = await mapWithConcurrency(links, 4, async (link) => {
+    try {
+      return { originalLink: link, response: await client.unrestrictLink(link) };
+    } catch {
+      return { originalLink: link, response: null };
+    }
+  });
 
   await db
     .insert(debridLinks)
@@ -282,6 +297,28 @@ function toDebridLinkInsert(
 
 function isLikelyVideoFile(fileName: string): boolean {
   return /\.(mkv|mp4|m4v|webm|avi|mov)$/i.test(fileName);
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(concurrency, items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await mapper(items[index]);
+      }
+    }),
+  );
+
+  return results;
 }
 
 async function rescheduleJob(job: PollingJobRow, now: Date) {

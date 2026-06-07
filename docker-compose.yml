@@ -89,6 +89,9 @@ services:
       # inotify events don't cross the podman VM bind mount on macOS, so the
       # Next.js (webpack) dev watcher never sees host edits. Poll instead → HMR works.
       WATCHPACK_POLLING: "true"
+      # Keep polling coarse enough that the mounted project tree does not pin
+      # the container CPU while still making host edits show up quickly.
+      WATCHPACK_POLLING_INTERVAL: "1000"
     volumes:
       - .:/app
       # Keep container-managed build artefacts out of the host bind mount so a

@@ -30,18 +30,6 @@ function cmdlineOf(pid: number): string {
   }
 }
 
-function ppidOf(pid: number): number | null {
-  try {
-    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    // Format: `pid (comm) state ppid ...`. comm can contain spaces/parens, so
-    // start parsing after the final ')'.
-    const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-    return Number(fields[1]); // [0] = state, [1] = ppid
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Processes running the Next CLI launcher (`next dev` / `next start`). We match
  * the launcher path specifically so we skip the `next-server` fork and the
