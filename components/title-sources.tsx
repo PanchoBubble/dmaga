@@ -17,7 +17,13 @@ import { cn } from "@/lib/utils";
  * renders them with the same {@link TorrentResultCard} as the search page, so
  * Add-to-Real-Debrid / Save / Magnet all work identically here.
  */
-export function TitleSources({ args }: { args: TitleSourcesArgs }) {
+export function TitleSources({
+  args,
+  mode = "download",
+}: {
+  args: TitleSourcesArgs;
+  mode?: "download" | "manga";
+}) {
   const [sortKey, setSortKey] = useState<SortKey>("seeds");
   const [filterOpen, setFilterOpen] = useState(false);
   const availableIndexers = useSearchStore((state) => state.availableIndexers);
@@ -31,7 +37,8 @@ export function TitleSources({ args }: { args: TitleSourcesArgs }) {
     selectedIndexerIds === null
       ? "All indexers"
       : `${selectedCount} ${selectedCount === 1 ? "indexer" : "indexers"}`;
-  const hasEmptyIndexerScope = selectedIndexerIds !== null && selectedIndexerIds.length === 0;
+  const hasEmptyIndexerScope =
+    selectedIndexerIds !== null && selectedIndexerIds.length === 0;
   const { results, errors, status, indexersSearched, indexersCompleted, error, retry } =
     useTitleSources(args, sortKey, selectedIndexerIds);
 
@@ -123,7 +130,12 @@ export function TitleSources({ args }: { args: TitleSourcesArgs }) {
       {!hasEmptyIndexerScope && results.length ? (
         <section className="grid gap-4 lg:grid-cols-2">
           {results.map((result, index) => (
-            <TorrentResultCard index={index} key={result.id} result={result} />
+            <TorrentResultCard
+              index={index}
+              key={result.id}
+              mode={mode}
+              result={result}
+            />
           ))}
         </section>
       ) : !hasEmptyIndexerScope && isLoading ? (

@@ -1,6 +1,7 @@
 import { DiscoverRows } from "@/components/discover-rows";
 import { DiscoverSearch } from "@/components/discover-search";
 import type { DiscoverRow, DiscoverRowId } from "@/lib/discover";
+import { mangaCatalogItems } from "@/lib/manga";
 import { fetchCatalog } from "@/lib/server/metadata/cinemeta";
 import { listMyAnimeListAnime } from "@/lib/server/myanimelist/auth-service";
 import {
@@ -51,6 +52,13 @@ export default async function DiscoverPage() {
     ]);
   const rows = sortRows(
     [
+      {
+        id: "manga:starter",
+        kind: "manga",
+        title: "Manga",
+        href: "/manga",
+        items: mangaCatalogItems,
+      },
       ...malRows,
       {
         id: "catalog:popular-movies",

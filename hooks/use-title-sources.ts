@@ -17,7 +17,7 @@ export type TitleSourcesArgs = {
   query: string;
   /** IMDB id for id-aware indexers (Torrentio); skips their Cinemeta lookup. */
   imdbId?: string;
-  type: CatalogType;
+  type: CatalogType | "manga";
   /** Optional Torznab categories; overrides the movie/series defaults. */
   categories?: string[];
   /** Season/episode, for series episode-level source lookups. */
@@ -35,7 +35,10 @@ export type TitleSourcesState = {
 };
 
 /** Torznab buckets so keyword indexers scope the right section. */
-function categoriesFor(type: CatalogType): string[] {
+function categoriesFor(type: CatalogType | "manga"): string[] {
+  if (type === "manga") {
+    return ["7030"];
+  }
   return type === "series" ? ["5000"] : ["2000"];
 }
 

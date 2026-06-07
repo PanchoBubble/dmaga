@@ -1,7 +1,9 @@
 import type { CatalogItem } from "@/lib/metadata";
+import type { MangaCatalogItem } from "@/lib/manga";
 import type { MyAnimeListAnime } from "@/lib/myanimelist";
 
 export const discoverRowIds = [
+  "manga:starter",
   "mal:watching",
   "mal:plan_to_watch",
   "catalog:popular-movies",
@@ -27,4 +29,15 @@ export type DiscoverMyAnimeListRow = {
   items: MyAnimeListAnime[];
 };
 
-export type DiscoverRow = DiscoverCatalogRow | DiscoverMyAnimeListRow;
+export type DiscoverMangaRow = {
+  id: DiscoverRowId;
+  kind: "manga";
+  title: string;
+  href: string;
+  items: MangaCatalogItem[];
+};
+
+export type DiscoverRow =
+  | DiscoverCatalogRow
+  | DiscoverMyAnimeListRow
+  | DiscoverMangaRow;

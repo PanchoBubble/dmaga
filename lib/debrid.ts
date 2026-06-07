@@ -41,6 +41,8 @@ export type AddToDebridResponse = {
   /** Download progress 0–100 reported by Real-Debrid. */
   progress: number;
   filename?: string;
+  /** First PDF/image/CBZ-style file available for the manga reader, when present. */
+  primaryReadableLinkId?: string;
   /** True when the item already existed and is downloadable (no re-add). */
   reused: boolean;
 };

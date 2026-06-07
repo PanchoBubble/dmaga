@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   ArrowDownToLine,
+  BookOpen,
   CheckCircle2,
   Download,
   Loader2,
@@ -22,6 +23,7 @@ import {
   type AddedItemDto,
   type AddedItemLinkDto,
 } from "@/lib/debrid";
+import { isReadableMangaFile } from "@/lib/manga";
 import { classifyPlayback, type PlaybackKind } from "@/lib/playback";
 import { formatBytes, formatRelativeAge } from "@/lib/search";
 import { cn } from "@/lib/utils";
@@ -357,6 +359,18 @@ function PackFileRow({ link }: { link: AddedItemLinkDto }) {
           >
             <Link href={`/player/${link.id}`}>
               <Play className="size-4" />
+            </Link>
+          </Button>
+        ) : null}
+        {isReadableMangaFile(link.fileName) ? (
+          <Button
+            asChild
+            aria-label={`Read ${link.fileName}`}
+            size="icon"
+            variant="outline"
+          >
+            <Link href={`/reader/${link.id}`}>
+              <BookOpen className="size-4" />
             </Link>
           </Button>
         ) : null}

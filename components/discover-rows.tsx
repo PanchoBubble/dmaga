@@ -8,6 +8,7 @@ import { useState } from "react";
 import { PosterCard } from "@/components/poster-card";
 import { Button } from "@/components/ui/button";
 import type { DiscoverRow, DiscoverRowId } from "@/lib/discover";
+import type { MangaCatalogItem } from "@/lib/manga";
 import type { MyAnimeListAnime } from "@/lib/myanimelist";
 
 export function DiscoverRows({ initialRows }: { initialRows: DiscoverRow[] }) {
@@ -31,7 +32,7 @@ export function DiscoverRows({ initialRows }: { initialRows: DiscoverRow[] }) {
         <section className="space-y-3" key={row.id}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              {row.kind === "catalog" ? (
+              {row.kind !== "mal" ? (
                 <Link
                   className="inline-flex items-center gap-1 hover:text-muted-foreground"
                   href={row.href}
@@ -45,7 +46,7 @@ export function DiscoverRows({ initialRows }: { initialRows: DiscoverRow[] }) {
             </div>
 
             <div className="flex items-center gap-1">
-              {row.kind === "catalog" ? (
+              {row.kind !== "mal" ? (
                 <Link
                   className="mr-2 hidden text-sm font-bold text-muted-foreground hover:text-foreground sm:inline-flex"
                   href={row.href}
@@ -88,7 +89,9 @@ export function DiscoverRows({ initialRows }: { initialRows: DiscoverRow[] }) {
                     <PosterCard item={item} />
                   </div>
                 ))
-              : row.items.map((item) => <AnimeCard item={item} key={item.id} />)}
+              : row.kind === "manga"
+                ? row.items.map((item) => <MangaCard item={item} key={item.slug} />)
+                : row.items.map((item) => <AnimeCard item={item} key={item.id} />)}
           </div>
         </section>
       ))}
@@ -102,6 +105,43 @@ async function persistOrder(rowOrder: DiscoverRowId[]) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rowOrder }),
   });
+}
+
+function MangaCard({ item }: { item: MangaCatalogItem }) {
+  return (
+    <Link
+      className="group flex w-32 shrink-0 flex-col border-2 border-foreground bg-card shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-36"
+      href={`/manga/${item.slug}`}
+    >
+      <div className="relative aspect-[2/3] w-full overflow-hidden border-b-2 border-foreground bg-secondary">
+        {item.poster ? (
+          <Image
+            alt={item.title}
+            className="object-cover"
+            fill
+            sizes="9rem"
+            src={item.poster}
+            unoptimized
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center p-3 text-center text-sm font-black">
+            {item.title}
+          </div>
+        )}
+        <span className="absolute right-1 top-1 border-2 border-foreground bg-background px-1.5 py-0.5 text-[10px] font-black uppercase">
+          Read
+        </span>
+      </div>
+      <div className="flex flex-col gap-0.5 p-2">
+        <h3 className="line-clamp-2 min-h-[2.5em] text-sm font-black leading-tight">
+          {item.title}
+        </h3>
+        <span className="line-clamp-1 text-xs font-bold text-muted-foreground">
+          {item.subtitle}
+        </span>
+      </div>
+    </Link>
+  );
 }
 
 function AnimeCard({ item }: { item: MyAnimeListAnime }) {

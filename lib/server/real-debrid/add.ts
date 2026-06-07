@@ -7,6 +7,7 @@ import {
   type AddToDebridResponse,
   type DebridItemStatus,
 } from "@/lib/debrid";
+import { isReadableMangaFile } from "@/lib/manga";
 import { resolveInfoHash, upsertMediaItem } from "@/lib/server/media-items";
 import {
   createAuthenticatedRealDebridClient,
@@ -14,7 +15,10 @@ import {
 } from "@/lib/server/real-debrid/auth-service";
 import { RealDebridClient } from "@/lib/server/real-debrid/client";
 import { toAvailability } from "@/lib/server/real-debrid/availability";
-import { enqueueDebridPolling, refreshDebridLinks } from "@/lib/server/real-debrid/poller";
+import {
+  enqueueDebridPolling,
+  refreshDebridLinks,
+} from "@/lib/server/real-debrid/poller";
 import type {
   RealDebridTorrent,
   RealDebridTorrentStatus,
@@ -60,7 +64,7 @@ export async function addSearchResultToDebrid(
     if (existing.status === "ready" && existing.realDebridTorrentId) {
       await backfillLinksIfMissing(existing.id, existing.realDebridTorrentId);
     }
-    return toResponse(mediaItem.id, existing, true);
+    return await toResponse(mediaItem.id, existing, true);
   }
 
   const account = await getLatestRealDebridAccount();
@@ -113,7 +117,10 @@ export async function addSearchResultToDebrid(
     await enqueueDebridPolling(saved.id);
   }
 
-  return { ...toResponse(mediaItem.id, saved, false), filename: torrent.filename };
+  return {
+    ...(await toResponse(mediaItem.id, saved, false)),
+    filename: torrent.filename,
+  };
 }
 
 /**
@@ -214,11 +221,11 @@ async function upsertDebridItem(
   return created;
 }
 
-function toResponse(
+async function toResponse(
   mediaItemId: string,
   row: DebridItemRow,
   reused: boolean,
-): AddToDebridResponse {
+): Promise<AddToDebridResponse> {
   return {
     mediaItemId,
     debridItemId: row.id,
@@ -226,8 +233,26 @@ function toResponse(
     status: row.status,
     availability: toAvailability(row.status),
     progress: row.progress,
+    primaryReadableLinkId: await findPrimaryReadableLinkId(row.id),
     reused,
   };
+}
+
+async function findPrimaryReadableLinkId(
+  debridItemId: string,
+): Promise<string | undefined> {
+  const links = await db
+    .select({
+      id: debridLinks.id,
+      fileName: debridLinks.fileName,
+      fileSizeBytes: debridLinks.fileSizeBytes,
+    })
+    .from(debridLinks)
+    .where(eq(debridLinks.debridItemId, debridItemId));
+
+  return links
+    .filter((link) => isReadableMangaFile(link.fileName))
+    .sort((a, b) => (b.fileSizeBytes ?? 0) - (a.fileSizeBytes ?? 0))[0]?.id;
 }
 
 function mapTorrentStatus(status: RealDebridTorrentStatus): DebridItemStatus {
