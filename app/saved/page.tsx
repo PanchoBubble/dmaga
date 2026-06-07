@@ -19,7 +19,7 @@ export default async function SavedPage() {
 
   return (
     <div className="space-y-4">
-      <section className="border-2 border-foreground bg-card p-4 shadow-line">
+      <section className="border-2 border-foreground bg-card p-4">
         <div className="flex items-center gap-3">
           <Star className="size-6 fill-current" />
           <div>
