@@ -50,6 +50,13 @@
       "when": 1780850105263,
       "tag": "0006_white_bruce_banner",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780852885206,
+      "tag": "0007_slippery_nightcrawler",
+      "breakpoints": true
     }
   ]
 }

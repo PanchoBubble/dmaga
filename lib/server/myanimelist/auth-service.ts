@@ -154,6 +154,11 @@ export async function listMyAnimeListAnime(status: MyAnimeListStatus, limit?: nu
   return client.getAnimeList(status, limit);
 }
 
+export async function getMyAnimeListAnime(id: number) {
+  const client = await createAuthenticatedMyAnimeListClient();
+  return client.getAnime(id);
+}
+
 function isTokenExpiring(expiresAt: Date | null) {
   if (!expiresAt) {
     return true;

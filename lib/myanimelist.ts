@@ -18,7 +18,11 @@ export type MyAnimeListAnime = {
   title: string;
   picture?: string;
   url: string;
-  status: MyAnimeListStatus;
+  status?: MyAnimeListStatus;
+  synopsis?: string;
+  mean?: number;
+  episodes?: number;
+  startDate?: string;
   episodesWatched?: number;
   score?: number;
 };

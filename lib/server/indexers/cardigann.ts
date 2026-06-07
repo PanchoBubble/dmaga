@@ -153,6 +153,10 @@ function definitionFor(config: IndexerConfig): CardigannDefinition {
 }
 
 const definitions: Record<string, CardigannDefinition> = {
+  "anime-nyaa-si": {
+    key: "anime-nyaa-si",
+    search: searchNyaa,
+  },
   "prowlarr-public-1337x": {
     key: "prowlarr-public-1337x",
     search: async (config, params) => {
@@ -175,17 +179,7 @@ const definitions: Record<string, CardigannDefinition> = {
   },
   "prowlarr-public-nyaasi": {
     key: "prowlarr-public-nyaasi",
-    search: async (config, params) => {
-      const url = new URL(config.baseUrl);
-      url.searchParams.set("page", "rss");
-      url.searchParams.set("q", params.query);
-      const category = firstCategory(params, config);
-      if (category) {
-        url.searchParams.set("c", category);
-      }
-      const xml = await fetchIndexerText(config, url.toString());
-      return parseRss(config, xml, params.limit);
-    },
+    search: searchNyaa,
   },
   "prowlarr-public-yts": {
     key: "prowlarr-public-yts",
@@ -323,6 +317,21 @@ const definitions: Record<string, CardigannDefinition> = {
     },
   },
 };
+
+async function searchNyaa(
+  config: IndexerConfig,
+  params: TorrentSearchParams,
+): Promise<TorrentSearchResult[]> {
+  const url = new URL(config.baseUrl);
+  url.searchParams.set("page", "rss");
+  url.searchParams.set("q", params.query);
+  const category = firstCategory(params, config);
+  if (category) {
+    url.searchParams.set("c", category);
+  }
+  const xml = await fetchIndexerText(config, url.toString());
+  return parseRss(config, xml, params.limit);
+}
 
 async function normalize1337x(
   config: IndexerConfig,

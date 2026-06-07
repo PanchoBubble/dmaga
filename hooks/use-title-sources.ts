@@ -18,6 +18,8 @@ export type TitleSourcesArgs = {
   /** IMDB id for id-aware indexers (Torrentio); skips their Cinemeta lookup. */
   imdbId?: string;
   type: CatalogType;
+  /** Optional Torznab categories; overrides the movie/series defaults. */
+  categories?: string[];
   /** Season/episode, for series episode-level source lookups. */
   season?: number;
   episode?: number;
@@ -52,7 +54,7 @@ export function useTitleSources(
 
   // Stable key so the effect only re-runs when the actual target changes.
   const key = args
-    ? `${args.type}|${args.imdbId ?? ""}|${args.season ?? ""}|${args.episode ?? ""}|${args.query}|${indexerIds?.join(",") ?? "all"}`
+    ? `${args.type}|${args.imdbId ?? ""}|${args.season ?? ""}|${args.episode ?? ""}|${args.categories?.join(",") ?? ""}|${args.query}|${indexerIds?.join(",") ?? "all"}`
     : null;
 
   const [runId, setRunId] = useState(0);
@@ -72,7 +74,7 @@ export function useTitleSources(
     setState({ ...initialState, status: "loading" });
 
     const params = new URLSearchParams({ q: args.query });
-    for (const category of categoriesFor(args.type)) {
+    for (const category of args.categories ?? categoriesFor(args.type)) {
       params.append("cat", category);
     }
     if (args.imdbId) {

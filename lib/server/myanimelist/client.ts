@@ -34,6 +34,19 @@ type AnimeListResponse = {
   }>;
 };
 
+type AnimeDetailResponse = {
+  id?: number;
+  title?: string;
+  synopsis?: string;
+  mean?: number;
+  num_episodes?: number;
+  start_date?: string;
+  main_picture?: {
+    medium?: string;
+    large?: string;
+  };
+};
+
 export class MyAnimeListApiError extends Error {
   constructor(
     message: string,
@@ -169,6 +182,27 @@ export class MyAnimeListClient {
         };
       })
       .filter((item): item is MyAnimeListAnime => item !== null);
+  }
+
+  async getAnime(id: number): Promise<MyAnimeListAnime | null> {
+    const params = new URLSearchParams({
+      fields: "id,title,synopsis,mean,num_episodes,start_date,main_picture",
+    });
+    const anime = await this.get<AnimeDetailResponse>(`/anime/${id}?${params}`);
+    if (!anime.id || !anime.title) {
+      return null;
+    }
+
+    return {
+      id: anime.id,
+      title: anime.title,
+      synopsis: anime.synopsis,
+      mean: anime.mean,
+      episodes: anime.num_episodes,
+      startDate: anime.start_date,
+      picture: anime.main_picture?.large ?? anime.main_picture?.medium,
+      url: `https://myanimelist.net/anime/${anime.id}`,
+    };
   }
 
   private async get<T>(path: string): Promise<T> {

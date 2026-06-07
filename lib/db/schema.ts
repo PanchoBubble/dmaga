@@ -88,6 +88,19 @@ export const myAnimeListAccounts = pgTable("my_anime_list_accounts", {
   ...timestamps,
 });
 
+export const myAnimeListDiscoverPreferences = pgTable(
+  "my_anime_list_discover_preferences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    preferenceKey: text("preference_key").notNull(),
+    rowOrder: jsonb("row_order").$type<string[]>().notNull().default([]),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("my_anime_list_discover_preferences_key_idx").on(table.preferenceKey),
+  ],
+);
+
 export const indexers = pgTable(
   "indexers",
   {
