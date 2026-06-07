@@ -36,6 +36,20 @@
       "when": 1780772321697,
       "tag": "0004_last_edwin_jarvis",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780848712408,
+      "tag": "0005_silent_redwing",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780850105263,
+      "tag": "0006_white_bruce_banner",
+      "breakpoints": true
     }
   ]
 }

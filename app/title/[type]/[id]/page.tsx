@@ -4,8 +4,10 @@ import { notFound } from "next/navigation";
 
 import { SeasonEpisodes } from "@/components/season-episodes";
 import { TitleSources } from "@/components/title-sources";
+import { TitleViewedActions } from "@/components/title-viewed-actions";
 import { asCatalogType, buildSourceQuery } from "@/lib/metadata";
 import { fetchTitle } from "@/lib/server/metadata/cinemeta";
+import { getViewedTitle } from "@/lib/server/viewed-titles";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +32,10 @@ export default async function TitleDetailPage({
     notFound();
   }
 
+  const viewedState = await getViewedTitle({ catalogType: type, catalogId: title.id });
+  const myAnimeListUrl = `https://myanimelist.net/anime.php?q=${encodeURIComponent(
+    title.name,
+  )}`;
   const year = title.releaseInfo;
   const genres = title.genres?.slice(0, 4) ?? [];
 
@@ -106,6 +112,14 @@ export default async function TitleDetailPage({
                 {title.description}
               </p>
             ) : null}
+
+            <TitleViewedActions
+              catalogId={title.id}
+              catalogType={type}
+              initialViewed={viewedState.viewed}
+              myAnimeListUrl={myAnimeListUrl}
+              title={title.name}
+            />
           </div>
         </div>
       </header>

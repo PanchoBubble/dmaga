@@ -75,6 +75,19 @@ export const realDebridAccounts = pgTable("real_debrid_accounts", {
   ...timestamps,
 });
 
+export const myAnimeListAccounts = pgTable("my_anime_list_accounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: text("account_id"),
+  username: text("username"),
+  encryptedAccessToken: text("encrypted_access_token"),
+  encryptedRefreshToken: text("encrypted_refresh_token"),
+  accessTokenExpiresAt: timestamp("access_token_expires_at", {
+    withTimezone: true,
+  }),
+  lastAuthenticatedAt: timestamp("last_authenticated_at", { withTimezone: true }),
+  ...timestamps,
+});
+
 export const indexers = pgTable(
   "indexers",
   {
@@ -122,6 +135,24 @@ export const mediaItems = pgTable(
     index("media_items_saved_idx").on(table.saved),
     index("media_items_info_hash_idx").on(table.infoHash),
     index("media_items_normalized_title_idx").on(table.normalizedTitle),
+  ],
+);
+
+export const viewedTitles = pgTable(
+  "viewed_titles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    catalogType: text("catalog_type").notNull(),
+    catalogId: text("catalog_id").notNull(),
+    title: text("title").notNull(),
+    myAnimeListUrl: text("my_anime_list_url"),
+    viewed: boolean("viewed").notNull().default(false),
+    viewedAt: timestamp("viewed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("viewed_titles_catalog_idx").on(table.catalogType, table.catalogId),
+    index("viewed_titles_viewed_idx").on(table.viewed),
   ],
 );
 

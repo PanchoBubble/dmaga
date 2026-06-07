@@ -1,3 +1,5 @@
+import { DiscoverSearch } from "@/components/discover-search";
+import { MyAnimeListDiscoverSection } from "@/components/myanimelist-discover-section";
 import { PosterRow } from "@/components/poster-row";
 import { fetchCatalog } from "@/lib/server/metadata/cinemeta";
 
@@ -23,13 +25,16 @@ export default async function DiscoverPage() {
 
   return (
     <div className="space-y-8">
-      <header className="border-2 border-foreground bg-card p-4 shadow-line">
+      <header className="border-2 border-foreground bg-card p-4">
         <h1 className="text-2xl font-black">Discover</h1>
         <p className="mt-1 text-sm font-semibold text-muted-foreground">
-          Browse movies and shows, then grab the best source to your Real-Debrid
+          Search across movies and shows, then grab the best source to your Real-Debrid
           library.
         </p>
       </header>
+
+      <DiscoverSearch />
+      <MyAnimeListDiscoverSection />
 
       <PosterRow href="/discover/movie" items={popularMovies} title="Popular Movies" />
       <PosterRow href="/discover/series" items={popularShows} title="Popular Shows" />

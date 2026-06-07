@@ -70,7 +70,58 @@ const utilityIndexerPresets = [
   },
 ] satisfies Array<IndexerPreset & { type: IndexerType; fetchMode: IndexerFetchMode }>;
 
+const animeIndexerPresets = [
+  {
+    presetKey: "anime-nyaa-si",
+    name: "Anime - Nyaa.si",
+    type: "cardigann",
+    baseUrl: "https://nyaa.si/",
+    fetchMode: "direct",
+    enabled: false,
+    categories: ["1_0", "1_1", "1_2", "1_3", "1_4", "2_0", "2_1", "2_2"],
+    description:
+      "Anime-focused Nyaa.si preset surfaced for quick setup. Covers anime video and audio categories.",
+    requiresApiKey: false,
+  },
+  {
+    presetKey: "anime-acg-rip",
+    name: "Anime - ACG.RIP",
+    type: "cardigann",
+    baseUrl: "https://acg.rip/",
+    fetchMode: "direct",
+    enabled: false,
+    categories: [],
+    description:
+      "Anime and Japanese media releases from ACG.RIP, useful for current seasonal shows.",
+    requiresApiKey: false,
+  },
+  {
+    presetKey: "anime-tokyo-toshokan",
+    name: "Anime - Tokyo Toshokan",
+    type: "cardigann",
+    baseUrl: "https://www.tokyotosho.info/",
+    fetchMode: "direct",
+    enabled: false,
+    categories: ["1", "3", "8", "10"],
+    description:
+      "Japanese media tracker with anime, manga, music, and batch release categories.",
+    requiresApiKey: false,
+  },
+  {
+    presetKey: "anime-shana-project",
+    name: "Anime - Shana Project",
+    type: "cardigann",
+    baseUrl: "https://www.shanaproject.com/",
+    fetchMode: "direct",
+    enabled: false,
+    categories: ["Anime"],
+    description: "Anime release tracker for following shows and fansub releases.",
+    requiresApiKey: false,
+  },
+] satisfies Array<IndexerPreset & { type: IndexerType; fetchMode: IndexerFetchMode }>;
+
 export const defaultIndexerPresets = [
   ...utilityIndexerPresets,
+  ...animeIndexerPresets,
   ...prowlarrPublicIndexerPresets,
 ] satisfies Array<IndexerPreset & { type: IndexerType; fetchMode: IndexerFetchMode }>;

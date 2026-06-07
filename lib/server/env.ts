@@ -25,6 +25,9 @@ const envSchema = z.object({
   INDEXER_PROXY_URL: optionalSecret,
   REAL_DEBRID_CLIENT_ID: optionalSecret,
   REAL_DEBRID_CLIENT_SECRET: optionalSecret,
+  MYANIMELIST_CLIENT_ID: optionalSecret,
+  MYANIMELIST_CLIENT_SECRET: optionalSecret,
+  NEXT_PUBLIC_APP_URL: z.string().default("http://localhost:3000"),
   TOKEN_ENCRYPTION_KEY: optionalSecret,
   HOST_DOWNLOAD_DIR: z.string().default("./downloads"),
 });

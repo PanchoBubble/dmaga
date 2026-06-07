@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { PosterCard } from "@/components/poster-card";
@@ -21,10 +21,13 @@ async function fetchCatalogPage(args: {
   type: CatalogType;
   sort: CatalogSort;
   genre: string | null;
+  search: string;
   skip: number;
 }): Promise<CatalogItem[] | null> {
   const params = new URLSearchParams({ type: args.type, sort: args.sort });
-  if (args.genre) {
+  if (args.search.trim()) {
+    params.set("search", args.search.trim());
+  } else if (args.genre) {
     params.set("genre", args.genre);
   }
   if (args.skip > 0) {
@@ -70,6 +73,8 @@ export function DiscoverGrid({
 }) {
   const [sort, setSort] = useState<CatalogSort>(initialSort);
   const [genre, setGenre] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [items, setItems] = useState<CatalogItem[]>([]);
   // Starts "loading": the mount effect fetches immediately. Sort/genre changes
   // and Load-more set the pending status from their event handlers, so the
@@ -87,7 +92,7 @@ export function DiscoverGrid({
   // effect body — so this can't trigger cascading renders.
   useEffect(() => {
     const id = ++requestId.current;
-    void fetchCatalogPage({ type, sort, genre, skip: 0 }).then((page) => {
+    void fetchCatalogPage({ type, sort, genre, search, skip: 0 }).then((page) => {
       if (id !== requestId.current) {
         return; // Superseded by a newer selection.
       }
@@ -98,13 +103,19 @@ export function DiscoverGrid({
       setItems(page);
       setStatus(page.length === 0 ? "done" : "idle");
     });
-  }, [type, sort, genre]);
+  }, [type, sort, genre, search]);
 
   // Load-more runs from a click handler, so state updates here are fine.
   async function loadMore() {
     const id = ++requestId.current;
     setStatus("more");
-    const page = await fetchCatalogPage({ type, sort, genre, skip: items.length });
+    const page = await fetchCatalogPage({
+      type,
+      sort,
+      genre,
+      search,
+      skip: items.length,
+    });
     if (id !== requestId.current) {
       return;
     }
@@ -121,7 +132,7 @@ export function DiscoverGrid({
   async function retry() {
     const id = ++requestId.current;
     setStatus("loading");
-    const page = await fetchCatalogPage({ type, sort, genre, skip: 0 });
+    const page = await fetchCatalogPage({ type, sort, genre, search, skip: 0 });
     if (id !== requestId.current) {
       return;
     }
@@ -135,9 +146,72 @@ export function DiscoverGrid({
 
   const isInitialLoading = status === "loading";
   const isLoadingMore = status === "more";
+  const activeSearch = search.trim();
+
+  function submitSearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const next = searchInput.trim();
+    if (next === search) {
+      return;
+    }
+    setStatus("loading");
+    setGenre(null);
+    setSearch(next);
+  }
+
+  function clearSearch() {
+    if (!searchInput && !search) {
+      return;
+    }
+    setSearchInput("");
+    setSearch("");
+    setStatus("loading");
+  }
 
   return (
     <div className="space-y-4">
+      <form
+        className="grid gap-2 border-2 border-foreground bg-card p-3 shadow-line sm:grid-cols-[minmax(0,1fr)_auto]"
+        onSubmit={submitSearch}
+      >
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            className="h-10 w-full border-2 border-foreground bg-background px-9 text-sm font-bold shadow-line outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder={`Search ${type === "movie" ? "movies" : "shows"} by title`}
+            value={searchInput}
+          />
+          {searchInput || search ? (
+            <button
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center border-2 border-transparent hover:border-foreground"
+              onClick={clearSearch}
+              type="button"
+            >
+              <X className="size-4" />
+            </button>
+          ) : null}
+        </label>
+
+        <Button disabled={isInitialLoading} type="submit">
+          <Search className="size-4" />
+          Search
+        </Button>
+      </form>
+
+      {activeSearch ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+          <span className="border-2 border-foreground bg-background px-2 py-1">
+            Results for: {activeSearch}
+          </span>
+          <Button className="h-8 px-2 text-xs" onClick={clearSearch} variant="outline">
+            <X className="size-4" />
+            Clear
+          </Button>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
         {catalogSorts.map((option) => (
           <Button
@@ -162,6 +236,7 @@ export function DiscoverGrid({
       <div className="-mx-1 flex flex-wrap gap-2 px-1">
         <GenreChip
           active={genre === null}
+          disabled={Boolean(activeSearch)}
           label="All"
           onClick={() => {
             if (genre === null) {
@@ -174,6 +249,7 @@ export function DiscoverGrid({
         {catalogGenres.map((value) => (
           <GenreChip
             active={genre === value}
+            disabled={Boolean(activeSearch)}
             key={value}
             label={value}
             onClick={() => {
@@ -246,10 +322,12 @@ function Grid({
 function GenreChip({
   label,
   active,
+  disabled = false,
   onClick,
 }: {
   label: string;
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -257,7 +335,11 @@ function GenreChip({
       className={cn(
         "border-2 border-foreground px-2.5 py-1 text-xs font-bold transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active ? "bg-foreground text-background" : "bg-background",
+        disabled
+          ? "cursor-not-allowed opacity-50 hover:translate-x-0 hover:translate-y-0"
+          : "",
       )}
+      disabled={disabled}
       onClick={onClick}
       type="button"
     >
