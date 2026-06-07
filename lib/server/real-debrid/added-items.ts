@@ -26,6 +26,7 @@ export async function listAddedItems(): Promise<AddedItemDto[]> {
     })
     .from(debridItems)
     .innerJoin(mediaItems, eq(debridItems.mediaItemId, mediaItems.id))
+    .where(ne(debridItems.status, "deleted"))
     .orderBy(desc(debridItems.updatedAt));
 
   const itemIds = rows.map((row) => row.id);
