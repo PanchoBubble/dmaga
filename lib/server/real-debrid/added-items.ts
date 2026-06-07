@@ -7,11 +7,7 @@ import { createAuthenticatedRealDebridClient } from "@/lib/server/real-debrid/au
 import { toAvailability } from "@/lib/server/real-debrid/availability";
 import { refreshDebridLinks } from "@/lib/server/real-debrid/poller";
 
-/**
- * Lists locally-tracked Real-Debrid items for the Added page, newest activity
- * first. Removed (`deleted`) items are kept visible so the UI can show the
- * terminal "Removed" state instead of silently losing recent history.
- */
+/** Lists locally-tracked Real-Debrid items for the Added page, newest activity first. */
 export async function listAddedItems(): Promise<AddedItemDto[]> {
   const rows = await db
     .select({
@@ -113,10 +109,7 @@ export async function listAddedItems(): Promise<AddedItemDto[]> {
   }));
 }
 
-export type AddedItemAction =
-  | "remove_local"
-  | "delete_from_debrid"
-  | "resolve_links";
+export type AddedItemAction = "remove_local" | "delete_from_debrid" | "resolve_links";
 
 export class AddedItemActionError extends Error {
   constructor(
@@ -135,7 +128,7 @@ export class AddedItemActionError extends Error {
 export async function updateAddedItemAction(
   id: string,
   action: AddedItemAction,
-): Promise<AddedItemDto> {
+): Promise<AddedItemDto | null> {
   const [item] = await db.select().from(debridItems).where(eq(debridItems.id, id));
 
   if (!item) {
@@ -152,18 +145,9 @@ export async function updateAddedItemAction(
     await client.deleteTorrent(item.realDebridTorrentId);
   }
 
-  await db
-    .update(debridItems)
-    .set({
-      status: "deleted",
-      progress: 0,
-      errorMessage: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(debridItems.id, id))
-    .returning();
+  await db.delete(debridItems).where(eq(debridItems.id, id));
 
-  return findRefreshedItem(id);
+  return null;
 }
 
 /**

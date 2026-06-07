@@ -131,7 +131,9 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
             <div className="absolute right-0 z-50 mt-2 w-56 border-2 border-foreground bg-popover p-1 shadow-line">
               <button
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
-                disabled={!isReady || !downloadLinks.length || Boolean(pendingHostDownloadId)}
+                disabled={
+                  !isReady || !downloadLinks.length || Boolean(pendingHostDownloadId)
+                }
                 onClick={() => {
                   if (downloadLinks[0]) {
                     void queueHostDownload(downloadLinks[0]);
@@ -157,7 +159,7 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
                 ) : (
                   <XCircle className="size-4" />
                 )}
-                Remove locally
+                Remove from Added
               </button>
               <button
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-destructive hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
@@ -347,7 +349,12 @@ function PackFileRow({ link }: { link: AddedItemLinkDto }) {
           </a>
         </Button>
         {link.streamable ? (
-          <Button asChild aria-label={`Play ${link.fileName}`} size="icon" variant="outline">
+          <Button
+            asChild
+            aria-label={`Play ${link.fileName}`}
+            size="icon"
+            variant="outline"
+          >
             <Link href={`/player/${link.id}`}>
               <Play className="size-4" />
             </Link>
