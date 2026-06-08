@@ -14,6 +14,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "dmaga",
   description: "LAN-first Real-Debrid torrent manager",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 /** Badge counts must reflect fresh state, so never statically cache them. */
