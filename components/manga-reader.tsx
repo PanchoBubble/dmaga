@@ -22,6 +22,17 @@ type ArchivePage = {
   uncompressedSize: number;
 };
 
+type ArchiveLoadProgress = {
+  receivedBytes: number;
+  totalBytes?: number;
+};
+
+type ArchiveLoadEvent =
+  | { type: "status"; message: string }
+  | ({ type: "download" } & ArchiveLoadProgress)
+  | { type: "done"; pages: ArchivePage[] }
+  | { type: "error"; message: string; status: number };
+
 export function MangaReader({
   linkId,
   fileName,
@@ -35,6 +46,9 @@ export function MangaReader({
     kind === "archive" ? "loading" : "idle",
   );
   const [error, setError] = useState<string | null>(null);
+  const [loadMessage, setLoadMessage] = useState("Preparing archive");
+  const [loadProgress, setLoadProgress] = useState<ArchiveLoadProgress | null>(null);
+  const [loadLogs, setLoadLogs] = useState<string[]>([]);
 
   useEffect(() => {
     if (kind !== "archive") {
@@ -42,26 +56,54 @@ export function MangaReader({
     }
 
     let cancelled = false;
+    const controller = new AbortController();
+    const pushLog = (message: string) => {
+      setLoadLogs((current) => [...current.slice(-3), message]);
+    };
 
     void (async () => {
       try {
-        const response = await fetch(`/api/reader/${linkId}/pages`, {
+        setStatus("loading");
+        setError(null);
+        setLoadMessage("Preparing archive");
+        setLoadProgress(null);
+        setLoadLogs(["Preparing archive"]);
+
+        const response = await fetch(`/api/reader/${linkId}/pages?stream=1`, {
           cache: "no-store",
+          signal: controller.signal,
         });
-        const payload = (await response.json()) as {
-          pages?: ArchivePage[];
-          error?: string;
-        };
         if (!response.ok) {
-          throw new Error(payload.error ?? "Unable to load pages.");
+          throw new Error("Unable to load pages.");
         }
-        if (!cancelled) {
-          setPages(payload.pages ?? []);
-          setPageIndex(0);
-          setFolder(defaultFolder(payload.pages ?? []));
-          setStatus("success");
-        }
+        await readArchiveLoadEvents(response, (event) => {
+          if (cancelled) {
+            return;
+          }
+          if (event.type === "status") {
+            setLoadMessage(event.message);
+            pushLog(event.message);
+          } else if (event.type === "download") {
+            setLoadProgress({
+              receivedBytes: event.receivedBytes,
+              totalBytes: event.totalBytes,
+            });
+            setLoadMessage("Downloading archive");
+          } else if (event.type === "done") {
+            setPages(event.pages ?? []);
+            setPageIndex(0);
+            setFolder(defaultFolder(event.pages ?? []));
+            setLoadMessage(`Found ${(event.pages ?? []).length} image pages`);
+            pushLog(`Found ${(event.pages ?? []).length} image pages`);
+            setStatus("success");
+          } else {
+            throw new Error(event.message);
+          }
+        });
       } catch (caught) {
+        if (caught instanceof DOMException && caught.name === "AbortError") {
+          return;
+        }
         if (!cancelled) {
           setError(caught instanceof Error ? caught.message : "Unable to load pages.");
           setStatus("error");
@@ -71,6 +113,7 @@ export function MangaReader({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [kind, linkId]);
 
@@ -126,6 +169,9 @@ export function MangaReader({
           }}
           setPageIndex={setPageIndex}
           status={status}
+          loadLogs={loadLogs}
+          loadMessage={loadMessage}
+          loadProgress={loadProgress}
         />
       ) : kind === "pdf" ? (
         <iframe
@@ -164,6 +210,9 @@ function ArchiveReader({
   setFolder,
   setPageIndex,
   status,
+  loadLogs,
+  loadMessage,
+  loadProgress,
 }: {
   currentPage?: ArchivePage;
   currentPageUrl: string | null;
@@ -175,12 +224,48 @@ function ArchiveReader({
   setFolder: (folder: string) => void;
   setPageIndex: (index: number) => void;
   status: "idle" | "loading" | "success" | "error";
+  loadLogs: string[];
+  loadMessage: string;
+  loadProgress: ArchiveLoadProgress | null;
 }) {
   if (status === "loading") {
+    const percent =
+      loadProgress?.totalBytes && loadProgress.totalBytes > 0
+        ? Math.min(
+            100,
+            Math.round((loadProgress.receivedBytes / loadProgress.totalBytes) * 100),
+          )
+        : null;
+
     return (
-      <div className="flex items-center gap-2 border-2 border-foreground bg-card px-3 py-2 text-sm font-black shadow-line">
-        <Loader2 className="size-4 animate-spin" />
-        Loading pages
+      <div className="space-y-3 border-2 border-foreground bg-card p-4 shadow-line">
+        <div className="flex items-center gap-2 text-sm font-black">
+          <Loader2 className="size-4 animate-spin" />
+          {loadMessage}
+        </div>
+        {loadProgress ? (
+          <div className="space-y-1">
+            <div className="h-3 overflow-hidden border-2 border-foreground bg-background">
+              <div
+                className="h-full bg-primary transition-[width]"
+                style={{ width: percent === null ? "35%" : `${percent}%` }}
+              />
+            </div>
+            <p className="text-xs font-bold text-muted-foreground">
+              {formatBytes(loadProgress.receivedBytes)}
+              {loadProgress.totalBytes
+                ? ` / ${formatBytes(loadProgress.totalBytes)}`
+                : " downloaded"}
+            </p>
+          </div>
+        ) : null}
+        {loadLogs.length ? (
+          <ol className="space-y-1 text-xs font-bold text-muted-foreground">
+            {loadLogs.map((entry, index) => (
+              <li key={`${entry}-${index}`}>{entry}</li>
+            ))}
+          </ol>
+        ) : null}
       </div>
     );
   }
@@ -319,4 +404,48 @@ function folderForPage(name: string): string {
 function fileNameForPage(name: string): string {
   const index = name.lastIndexOf("/");
   return index === -1 ? name : name.slice(index + 1);
+}
+
+async function readArchiveLoadEvents(
+  response: Response,
+  onEvent: (event: ArchiveLoadEvent) => void,
+) {
+  if (!response.body) {
+    const payload = (await response.json()) as {
+      pages?: ArchivePage[];
+      error?: string;
+    };
+    if (payload.error) {
+      onEvent({ type: "error", message: payload.error, status: response.status });
+    } else {
+      onEvent({ type: "done", pages: payload.pages ?? [] });
+    }
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.trim()) {
+        continue;
+      }
+      onEvent(JSON.parse(line) as ArchiveLoadEvent);
+    }
+
+    if (done) {
+      break;
+    }
+  }
+
+  if (buffer.trim()) {
+    onEvent(JSON.parse(buffer) as ArchiveLoadEvent);
+  }
 }

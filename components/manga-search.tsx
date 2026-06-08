@@ -161,6 +161,16 @@ function MangaResultCard({ item }: { item: MangaCatalogItem }) {
         <p className="line-clamp-1 text-xs font-bold text-muted-foreground">
           {item.subtitle}
         </p>
+        {item.volumes || item.chapters ? (
+          <p className="mt-1 line-clamp-1 text-[11px] font-black text-muted-foreground">
+            {[
+              item.volumes ? `${item.volumes} volumes` : null,
+              item.chapters ? `${item.chapters} chapters` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        ) : null}
       </div>
     </Link>
   );

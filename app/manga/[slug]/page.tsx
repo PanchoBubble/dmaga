@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { MangaVolumes } from "@/components/manga-volumes";
 import { TitleSources } from "@/components/title-sources";
 import { parseMangaCatalogSlug } from "@/lib/manga";
 import { fetchMangaCatalogItem } from "@/lib/server/metadata/jikan-manga";
@@ -89,15 +90,19 @@ export default async function MangaTitlePage({ params }: MangaTitlePageProps) {
         </div>
       </section>
 
-      <TitleSources
-        args={{
-          query: item.query,
-          type: "manga",
-          categories: ["7030"],
-        }}
-        mode="manga"
-        title="Manga Sources"
-      />
+      {item.volumes ? (
+        <MangaVolumes title={item.title} totalVolumes={item.volumes} />
+      ) : (
+        <TitleSources
+          args={{
+            query: item.query,
+            type: "manga",
+            categories: ["7030"],
+          }}
+          mode="manga"
+          title="Manga Sources"
+        />
+      )}
     </div>
   );
 }
