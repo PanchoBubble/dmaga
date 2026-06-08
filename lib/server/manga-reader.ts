@@ -17,7 +17,7 @@ export async function getReadableMangaLink(linkId: string, refresh = false) {
 export async function fetchMangaArchiveBuffer(linkId: string): Promise<Buffer> {
   const link = await getReadableMangaLink(linkId, true);
   if (link.kind !== "archive") {
-    throw new Error("This file is not a CBZ/ZIP archive.");
+    throw new Error("This file is not a readable archive.");
   }
 
   const response = await fetch(link.url, { cache: "no-store" });

@@ -70,6 +70,9 @@ export function classifyMangaFile(fileName: string): {
   if (extension === "cbz" || extension === "zip") {
     return { kind: "archive", mimeType: "application/zip", extension };
   }
+  if (extension === "cbr" || extension === "rar") {
+    return { kind: "archive", mimeType: "application/vnd.rar", extension };
+  }
   if (extension === "pdf") {
     return { kind: "pdf", mimeType: "application/pdf", extension };
   }

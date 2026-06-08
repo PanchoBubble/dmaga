@@ -21,7 +21,9 @@ export async function GET(_request: Request, { params }: RouteContext) {
     }
 
     const buffer = await fetchMangaArchiveBuffer(id);
-    return NextResponse.json({ pages: listMangaArchivePages(buffer) });
+    return NextResponse.json({
+      pages: await listMangaArchivePages(buffer, link.fileName),
+    });
   } catch (error) {
     if (error instanceof PlaybackError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

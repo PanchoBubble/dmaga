@@ -1,5 +1,8 @@
 import "server-only";
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { createRequire } from "node:module";
 import { inflateRawSync } from "node:zlib";
 
 import { isMangaImageFile, MANGA_IMAGE_MIME_TYPES } from "@/lib/manga";
@@ -19,7 +22,39 @@ const EOCD_SIGNATURE = 0x06054b50;
 const CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50;
 const LOCAL_FILE_SIGNATURE = 0x04034b50;
 
-export function listMangaArchivePages(buffer: Buffer): MangaArchiveEntry[] {
+const runtimeRequire = createRequire(import.meta.url);
+const unrarPackageName = "node-unrar-js";
+
+type UnrarModule = {
+  createExtractorFromData(options: {
+    data: ArrayBuffer;
+    wasmBinary: ArrayBuffer;
+  }): Promise<{
+    getFileList(): {
+      fileHeaders: Generator<{
+        name: string;
+        flags: { directory: boolean };
+        packSize: number;
+        unpSize: number;
+      }>;
+    };
+    extract(options: { files: string[] }): {
+      files: Generator<{
+        fileHeader: { name: string };
+        extraction?: Uint8Array;
+      }>;
+    };
+  }>;
+};
+
+export async function listMangaArchivePages(
+  buffer: Buffer,
+  fileName: string,
+): Promise<MangaArchiveEntry[]> {
+  if (isRarArchive(fileName)) {
+    return listRarPages(buffer);
+  }
+
   return readZipEntries(buffer)
     .filter((entry) => isMangaArchivePage(entry.name))
     .map(({ name, compressedSize, uncompressedSize }) => ({
@@ -30,10 +65,15 @@ export function listMangaArchivePages(buffer: Buffer): MangaArchiveEntry[] {
     .sort((a, b) => naturalCompare(a.name, b.name));
 }
 
-export function readMangaArchivePage(
+export async function readMangaArchivePage(
   buffer: Buffer,
+  fileName: string,
   name: string,
-): { bytes: Buffer; mimeType: string } | null {
+): Promise<{ bytes: Buffer; mimeType: string } | null> {
+  if (isRarArchive(fileName)) {
+    return readRarPage(buffer, name);
+  }
+
   const entry = readZipEntries(buffer).find((candidate) => candidate.name === name);
   if (!entry || !isMangaArchivePage(entry.name)) {
     return null;
@@ -64,6 +104,61 @@ export function readMangaArchivePage(
     bytes,
     mimeType: mimeTypeForImageName(entry.name),
   };
+}
+
+async function listRarPages(buffer: Buffer): Promise<MangaArchiveEntry[]> {
+  const extractor = await createRarExtractor(buffer);
+  const list = extractor.getFileList();
+
+  return [...list.fileHeaders]
+    .filter((entry) => !entry.flags.directory && isMangaArchivePage(entry.name))
+    .map((entry) => ({
+      name: entry.name,
+      compressedSize: entry.packSize,
+      uncompressedSize: entry.unpSize,
+    }))
+    .sort((a, b) => naturalCompare(a.name, b.name));
+}
+
+async function readRarPage(
+  buffer: Buffer,
+  name: string,
+): Promise<{ bytes: Buffer; mimeType: string } | null> {
+  const extractor = await createRarExtractor(buffer);
+  const extracted = extractor.extract({ files: [name] });
+  const files = [...extracted.files];
+  const file = files.find((candidate) => candidate.fileHeader.name === name);
+
+  if (!file?.extraction || !isMangaArchivePage(file.fileHeader.name)) {
+    return null;
+  }
+
+  return {
+    bytes: Buffer.from(file.extraction),
+    mimeType: mimeTypeForImageName(file.fileHeader.name),
+  };
+}
+
+async function createRarExtractor(buffer: Buffer) {
+  const unrar = runtimeRequire(`${unrarPackageName}/dist`) as UnrarModule;
+
+  return unrar.createExtractorFromData({
+    data: bufferToArrayBuffer(buffer),
+    wasmBinary: bufferToArrayBuffer(readUnrarWasmBinary()),
+  });
+}
+
+function readUnrarWasmBinary(): Buffer {
+  return readFileSync(
+    join(process.cwd(), "node_modules", unrarPackageName, "esm", "js", "unrar.wasm"),
+  );
+}
+
+function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {
+  return buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength,
+  ) as ArrayBuffer;
 }
 
 function readZipEntries(buffer: Buffer): ZipEntry[] {
@@ -122,6 +217,10 @@ function findEndOfCentralDirectory(buffer: Buffer): number {
 
 function isMangaArchivePage(name: string): boolean {
   return !name.startsWith("__MACOSX/") && isMangaImageFile(name);
+}
+
+function isRarArchive(name: string): boolean {
+  return /\.(cbr|rar)$/i.test(name);
 }
 
 function mimeTypeForImageName(name: string): string {

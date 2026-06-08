@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { readMangaArchivePage } from "@/lib/server/manga-archives";
-import { fetchMangaArchiveBuffer } from "@/lib/server/manga-reader";
+import {
+  fetchMangaArchiveBuffer,
+  getReadableMangaLink,
+} from "@/lib/server/manga-reader";
 import { PlaybackError } from "@/lib/server/real-debrid/playback";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -17,8 +20,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   }
 
   try {
+    const link = await getReadableMangaLink(id);
     const buffer = await fetchMangaArchiveBuffer(id);
-    const page = readMangaArchivePage(buffer, name);
+    const page = await readMangaArchivePage(buffer, link.fileName, name);
     if (!page) {
       return NextResponse.json({ error: "Page not found." }, { status: 404 });
     }
