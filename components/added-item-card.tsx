@@ -104,7 +104,7 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
   return (
     <article
       className={cn(
-        "flex flex-col border-2 border-foreground bg-card p-3 shadow-line sm:p-4",
+        "flex min-w-0 max-w-full flex-col overflow-hidden border-2 border-foreground bg-card p-3 shadow-line sm:p-4",
         isRemoved && "opacity-70",
         menuOpen && "relative z-40",
       )}
@@ -219,7 +219,7 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
           </p>
           <div
             className={cn(
-              "space-y-2",
+              "min-w-0 space-y-2",
               downloadLinks.length > 4 &&
                 "max-h-64 overflow-y-auto border-2 border-foreground bg-background p-2",
             )}
@@ -329,11 +329,11 @@ function FileKindBadge({ fileName }: { fileName: string }) {
 
 function PackFileRow({ link }: { link: AddedItemLinkDto }) {
   return (
-    <div className="w-full">
-      <div className="flex w-full items-stretch gap-2">
+    <div className="min-w-0 max-w-full">
+      <div className="flex w-full min-w-0 items-stretch gap-2">
         <Button
           asChild
-          className="min-w-0 flex-1 justify-between gap-2 px-3"
+          className="h-auto min-h-10 min-w-0 flex-1 justify-start whitespace-normal px-3 py-2"
           variant="outline"
         >
           <a
@@ -341,11 +341,13 @@ function PackFileRow({ link }: { link: AddedItemLinkDto }) {
             rel="noreferrer"
             target="_blank"
           >
-            <span className="flex min-w-0 items-center gap-2">
+            <span className="flex min-w-0 flex-1 items-center gap-2">
               <FileKindBadge fileName={link.fileName} />
-              <span className="truncate">{link.fileName}</span>
+              <span className="min-w-0 break-all text-left leading-tight sm:truncate">
+                {link.fileName}
+              </span>
             </span>
-            <span className="shrink-0 text-xs text-muted-foreground">
+            <span className="ml-auto shrink-0 text-xs text-muted-foreground">
               {formatBytes(link.fileSizeBytes ?? undefined)}
             </span>
           </a>

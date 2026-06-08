@@ -7,7 +7,7 @@
 # to restart. Named data volumes are always preserved (use `make nuke` to drop
 # them).
 
-.PHONY: up dev build rebuild down restart logs ps clean nuke
+.PHONY: up dev build rebuild down restart update logs ps clean nuke
 
 # Start the stack in the background WITHOUT rebuilding. Source changes
 # hot-reload through the bind mount, so the image only needs rebuilding when
@@ -37,6 +37,10 @@ down:
 
 # Restart without rebuilding (code changes hot-reload via the bind mount).
 restart: down up
+
+# Pull latest main, apply migrations, and restart the running server.
+update:
+	./scripts/pull-and-restart.sh
 
 # Full recreate: tear down, drop the managed node_modules/.next volumes so they
 # repopulate from the freshly built image (a rebuild usually means deps or the

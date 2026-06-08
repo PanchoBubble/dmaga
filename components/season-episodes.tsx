@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { TitleSubtitles } from "@/components/title-subtitles";
 import { TitleSources } from "@/components/title-sources";
 import { buildSourceQuery, type EpisodeInfo } from "@/lib/metadata";
 import { cn } from "@/lib/utils";
@@ -98,7 +99,15 @@ export function SeasonEpisodes({
               </button>
 
               {isSelected ? (
-                <div className="mt-3 border-l-2 border-foreground pl-3">
+                <div className="mt-3 space-y-6 border-l-2 border-foreground pl-3">
+                  <TitleSubtitles
+                    target={{
+                      type: "series",
+                      imdbId,
+                      season: episode.season,
+                      episode: episode.episode,
+                    }}
+                  />
                   <TitleSources
                     args={{
                       query: buildSourceQuery({

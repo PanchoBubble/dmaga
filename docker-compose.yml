@@ -59,9 +59,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: dmaga-app
-    command: pnpm dev
+    command: sh -c "pnpm build && pnpm start"
     restart: unless-stopped
-    # tini as PID 1 forwards SIGTERM to `pnpm dev`/Next and reaps children, so
+    # tini as PID 1 forwards SIGTERM to Next and reaps children, so
     # the container exits promptly on `down` instead of waiting out the kill
     # timeout. The grace period caps that wait as a backstop.
     init: true
@@ -70,30 +70,25 @@ services:
     # egress directly. Only indexer lookups are proxied over the VPN, via
     # INDEXER_PROXY_URL below.
     ports:
-      - "3000:3000"
+      - "80:3000"
     # Optional secrets are interpolated from .env when present; network URLs
     # below always win for in-cluster DNS.
     environment:
-      DATABASE_URL: postgresql://dmaga:dmaga@postgres:5432/dmaga
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: "${DATABASE_URL:-postgresql://dmaga:dmaga@postgres:5432/dmaga}"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
       # FlareSolverr and the indexer proxy ride the gluetun (VPN) netns,
       # reachable as `gluetun` on the Compose network.
-      FLARESOLVERR_URL: http://gluetun:8191/v1
-      INDEXER_PROXY_URL: http://gluetun:8888
-      REAL_DEBRID_CLIENT_ID: ${REAL_DEBRID_CLIENT_ID:-}
-      REAL_DEBRID_CLIENT_SECRET: ${REAL_DEBRID_CLIENT_SECRET:-}
-      MYANIMELIST_CLIENT_ID: ${MYANIMELIST_CLIENT_ID:-}
-      MYANIMELIST_CLIENT_SECRET: ${MYANIMELIST_CLIENT_SECRET:-}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      FLARESOLVERR_URL: "${FLARESOLVERR_URL:-http://gluetun:8191/v1}"
+      INDEXER_PROXY_URL: "${INDEXER_PROXY_URL:-http://gluetun:8888}"
+      REAL_DEBRID_CLIENT_ID: "${REAL_DEBRID_CLIENT_ID:-}"
+      REAL_DEBRID_CLIENT_SECRET: "${REAL_DEBRID_CLIENT_SECRET:-}"
+      MYANIMELIST_CLIENT_ID: "${MYANIMELIST_CLIENT_ID:-}"
+      MYANIMELIST_CLIENT_SECRET: "${MYANIMELIST_CLIENT_SECRET:-}"
+      TOKEN_ENCRYPTION_KEY: "${TOKEN_ENCRYPTION_KEY:-}"
       # Override with http://MACHINE_IP:3000 when accessing from other LAN devices.
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-      HOST_DOWNLOAD_DIR: /downloads
-      # inotify events don't cross the podman VM bind mount on macOS, so the
-      # Next.js (webpack) dev watcher never sees host edits. Poll instead → HMR works.
-      WATCHPACK_POLLING: "true"
-      # Keep polling coarse enough that the mounted project tree does not pin
-      # the container CPU while still making host edits show up quickly.
-      WATCHPACK_POLLING_INTERVAL: "1000"
+      NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
+      HOST_DOWNLOAD_DIR: "${HOST_DOWNLOAD_DIR:-/downloads}"
+      NODE_ENV: production
     volumes:
       - .:/app
       # Keep container-managed build artefacts out of the host bind mount so a
@@ -135,14 +130,14 @@ services:
     # Polls Real-Debrid only (no indexer lookups), so it stays off the VPN and
     # talks to Postgres/Redis/Real-Debrid directly.
     environment:
-      DATABASE_URL: postgresql://dmaga:dmaga@postgres:5432/dmaga
-      REDIS_URL: redis://redis:6379
-      REAL_DEBRID_CLIENT_ID: ${REAL_DEBRID_CLIENT_ID:-}
-      REAL_DEBRID_CLIENT_SECRET: ${REAL_DEBRID_CLIENT_SECRET:-}
-      MYANIMELIST_CLIENT_ID: ${MYANIMELIST_CLIENT_ID:-}
-      MYANIMELIST_CLIENT_SECRET: ${MYANIMELIST_CLIENT_SECRET:-}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
-      HOST_DOWNLOAD_DIR: /downloads
+      DATABASE_URL: "${DATABASE_URL:-postgresql://dmaga:dmaga@postgres:5432/dmaga}"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
+      REAL_DEBRID_CLIENT_ID: "${REAL_DEBRID_CLIENT_ID:-}"
+      REAL_DEBRID_CLIENT_SECRET: "${REAL_DEBRID_CLIENT_SECRET:-}"
+      MYANIMELIST_CLIENT_ID: "${MYANIMELIST_CLIENT_ID:-}"
+      MYANIMELIST_CLIENT_SECRET: "${MYANIMELIST_CLIENT_SECRET:-}"
+      TOKEN_ENCRYPTION_KEY: "${TOKEN_ENCRYPTION_KEY:-}"
+      HOST_DOWNLOAD_DIR: "${HOST_DOWNLOAD_DIR:-/downloads}"
     volumes:
       - .:/app
       # Named (not anonymous) — see the app service for why. Its own volume so
@@ -163,8 +158,6 @@ services:
       POSTGRES_USER: dmaga
       POSTGRES_PASSWORD: dmaga
       POSTGRES_DB: dmaga
-    ports:
-      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -178,8 +171,6 @@ services:
     container_name: dmaga-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:

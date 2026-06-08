@@ -1,6 +1,7 @@
+import { createHash } from "crypto";
 import { XMLParser } from "fast-xml-parser";
 
-import { fetchIndexerText } from "@/lib/server/indexers/fetch";
+import { fetchIndexerBytes, fetchIndexerText } from "@/lib/server/indexers/fetch";
 import {
   infoHashFromMagnet,
   magnetFromInfoHash,
@@ -168,6 +169,39 @@ const definitions: Record<string, CardigannDefinition> = {
       return normalize1337x(config, html, params.limit);
     },
   },
+  "prowlarr-public-anisource": {
+    key: "prowlarr-public-anisource",
+    search: async (config, params) => {
+      const url = new URL("/", config.baseUrl);
+      url.searchParams.set("search", params.query);
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeAniSource(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-damagnet": {
+    key: "prowlarr-public-damagnet",
+    search: async (config, params) => {
+      const url = new URL("/", config.baseUrl);
+      url.searchParams.set("q", params.query || String(new Date().getFullYear()));
+      url.searchParams.set("wanted", "100");
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeDaMagnet(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-ebookbay": {
+    key: "prowlarr-public-ebookbay",
+    search: async (config, params) => {
+      const pages = ["/", "/page/2/", "/page/3/", "/page/4/", "/page/5/"];
+      const bodies = await Promise.all(
+        pages.map(async (path) => {
+          const url = new URL(path, config.baseUrl);
+          url.searchParams.set("s", params.query);
+          return fetchIndexerText(config, url.toString()).catch(() => "");
+        }),
+      );
+      return normalizeEBookBay(config, bodies.join("\n"), params.limit);
+    },
+  },
   "prowlarr-public-eztv": {
     key: "prowlarr-public-eztv",
     search: async (config, params) => {
@@ -245,6 +279,84 @@ const definitions: Record<string, CardigannDefinition> = {
       return normalizeTorrentDownload(config, html, params.limit);
     },
   },
+  "prowlarr-public-gamestorrents": {
+    key: "prowlarr-public-gamestorrents",
+    search: async (config, params) => {
+      const url = new URL("/", config.baseUrl);
+      url.searchParams.set("s", params.query);
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeGamesTorrents(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-kickasstorrents-to": {
+    key: "prowlarr-public-kickasstorrents-to",
+    search: async (config, params) => {
+      const path = params.query
+        ? `/search/?q=${encodeURIComponent(params.query)}`
+        : "/17/All/";
+      const html = await fetchIndexerText(config, new URL(path, config.baseUrl).toString());
+      return normalizeKickassTo(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-kickasstorrents-ws": {
+    key: "prowlarr-public-kickasstorrents-ws",
+    search: async (config, params) => {
+      const path = params.query
+        ? `/usearch/${encodeURIComponent(params.query)}/?field=seeders&sorder=desc`
+        : "/new/?field=seeders&sorder=desc";
+      const html = await fetchIndexerText(config, new URL(path, config.baseUrl).toString());
+      return normalizeKickassWs(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-linuxtracker": {
+    key: "prowlarr-public-linuxtracker",
+    search: async (config, params) => {
+      const url = new URL("/index.php", config.baseUrl);
+      url.searchParams.set("page", "torrents");
+      url.searchParams.set("search", params.query);
+      url.searchParams.set("category", firstCategory(params, config) ?? "0");
+      url.searchParams.set("active", "1");
+      url.searchParams.set("order", "3");
+      url.searchParams.set("by", "2");
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeLinuxTracker(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-mactorrentsdownload": {
+    key: "prowlarr-public-mactorrentsdownload",
+    search: async (config, params) => {
+      const url = new URL("/", config.baseUrl);
+      url.searchParams.set("s", params.query);
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeMacTorrentsDownload(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-nipponsei": {
+    key: "prowlarr-public-nipponsei",
+    search: async (config, params) => {
+      const url = new URL("/index.php", config.baseUrl);
+      url.searchParams.set("section", "Tracker");
+      url.searchParams.set("search", params.query);
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeNipponsei(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-pctorrent": {
+    key: "prowlarr-public-pctorrent",
+    search: async (config, params) => {
+      const url = new URL("/", config.baseUrl);
+      if (params.query) {
+        url.searchParams.set("do", "search");
+        url.searchParams.set("subaction", "search");
+        url.searchParams.set("search_start", "0");
+        url.searchParams.set("full_search", "1");
+        url.searchParams.set("result_from", "1");
+        url.searchParams.set("story", params.query);
+      }
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizePcTorrent(config, html, params.limit);
+    },
+  },
   "prowlarr-public-torrentgalaxyclone": {
     key: "prowlarr-public-torrentgalaxyclone",
     search: async (config, params) => {
@@ -314,6 +426,28 @@ const definitions: Record<string, CardigannDefinition> = {
         await fetchIndexerText(config, url.toString()),
       );
       return normalizeTheRarbg(config, payload, params.limit);
+    },
+  },
+  "prowlarr-public-torrentby": {
+    key: "prowlarr-public-torrentby",
+    search: async (config, params) => {
+      const url = new URL(params.query ? "/search/" : "/today/", config.baseUrl);
+      if (params.query) {
+        url.searchParams.set("search", params.query);
+        url.searchParams.set("category", "0");
+      }
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeTorrentBy(config, html, params.limit);
+    },
+  },
+  "prowlarr-public-torrentcore": {
+    key: "prowlarr-public-torrentcore",
+    search: async (config, params) => {
+      const path = params.query
+        ? `/search?s=${encodeURIComponent(params.query)}`
+        : "/index";
+      const html = await fetchIndexerText(config, new URL(path, config.baseUrl).toString());
+      return normalizeTorrentCore(config, html, params.limit);
     },
   },
 };
@@ -802,6 +936,424 @@ async function normalizeTorrentDownload(
   return results.filter((result) => result.magnetUrl || result.infoHash);
 }
 
+function normalizeAniSource(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  return [...html.matchAll(/<div\b[^>]*class=["'][^"']*item[^"']*["'][\s\S]*?(?=<div\b[^>]*class=["'][^"']*item|$)/gi)]
+    .map((match) => match[0])
+    .slice(0, limit ?? 20)
+    .map((block) => {
+      const link = block.match(
+        /<a\b[^>]*href=["']([^"']*\/showprofile\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/i,
+      );
+      const href = htmlDecode(link?.[1]);
+      const title = cleanText(link?.[2]) ?? "Untitled";
+      const infoHash = normalizeHash(href?.match(/([a-f0-9]{40})/i)?.[1]);
+      const meta = cleanText(block);
+      return {
+        id: `${config.id}:${infoHash ?? href ?? title}`,
+        title: title.replace(/^(\[[^\]]+\])\s+(.+)$/, "$2 $1"),
+        sizeBytes: parseSize(meta?.match(/Size:\s*([^|]+)/i)?.[1]?.replace(/b\b/i, "B")),
+        publishedAt: toIsoDate(
+          meta?.match(/Date:\s*(.+?)\s+Central/i)?.[1]?.replace(" at ", " "),
+        ),
+        seeders: 1,
+        leechers: 1,
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: infoHash ? magnetFromInfoHash(infoHash, title) : undefined,
+        infoHash,
+        sourceUrl: href ? new URL(href, config.baseUrl).toString() : config.baseUrl,
+      };
+    })
+    .filter((result) => result.infoHash);
+}
+
+function normalizeDaMagnet(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  return [...html.matchAll(/<tr\b[\s\S]*?<\/tr>/gi)]
+    .map((match) => match[0])
+    .filter((row) => /<a\b/i.test(row))
+    .slice(0, limit ?? 20)
+    .map((row) => {
+      const link = row.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+      const href = htmlDecode(link?.[1]);
+      const title = cleanText(link?.[2]) ?? "Untitled";
+      const magnetUrl = pickMagnet(htmlDecode(row), href);
+      const infoHash =
+        infoHashFromMagnet(magnetUrl) ?? normalizeHash(href?.match(/([a-f0-9]{40})/i)?.[1]);
+      return {
+        id: `${config.id}:${infoHash ?? href ?? title}`,
+        title,
+        sizeBytes: parseSize(cellByIdPrefix(row, "size")),
+        seeders: 1,
+        leechers: 1,
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: magnetUrl ?? (infoHash ? magnetFromInfoHash(infoHash, title) : undefined),
+        infoHash,
+        sourceUrl: href?.startsWith("http") ? href : config.baseUrl,
+      };
+    })
+    .filter((result) => result.magnetUrl || result.infoHash);
+}
+
+async function normalizeEBookBay(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): Promise<TorrentSearchResult[]> {
+  const blocks = splitByMarker(html, /<div\b[^>]*class=["'][^"']*poststuff[^"']*["']/gi)
+    .filter((block) => /class=["'][^"']*download[^"']*["']|class=["'][^"']*detail[^"']*["']/i.test(block))
+    .slice(0, limit ?? 20);
+
+  const results = await Promise.all(
+    blocks.map(async (block) => {
+      const titleLink = block.match(
+        /<div\b[^>]*class=["'][^"']*postname[^"']*["'][\s\S]*?<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i,
+      );
+      const download = block.match(
+        /<a\b[^>]*class=["'][^"']*(?:download|detail)[^"']*["'][^>]*href=["']([^"']+)["']/i,
+      );
+      const title = cleanText(titleLink?.[2]) ?? "Untitled";
+      const detailUrl = absoluteUrl(htmlDecode(titleLink?.[1]), config.baseUrl);
+      const downloadUrl = absoluteUrl(htmlDecode(download?.[1]), config.baseUrl) ?? detailUrl;
+      const resolved = downloadUrl
+        ? await resolveMagnetFromDownload(config, downloadUrl, title)
+        : { magnet: undefined, infoHash: undefined };
+      return {
+        id: `${config.id}:${resolved.infoHash ?? downloadUrl ?? title}`,
+        title,
+        sizeBytes: parseSize(cleanText(block)?.match(/File Size:\s*([^|]+?)(?:\s+Seeds:|$)/i)?.[1]),
+        seeders: toNumber(cleanText(block)?.match(/Seeds:\s*(\d+)/i)?.[1]),
+        leechers: toNumber(cleanText(block)?.match(/Peers:\s*(\d+)/i)?.[1]),
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: resolved.magnet,
+        infoHash: resolved.infoHash,
+        sourceUrl: detailUrl ?? downloadUrl,
+      };
+    }),
+  );
+
+  return results.filter((result) => result.magnetUrl || result.infoHash);
+}
+
+async function normalizeGamesTorrents(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): Promise<TorrentSearchResult[]> {
+  const rows = [...html.matchAll(/<tr\b[\s\S]*?<\/tr>/gi)]
+    .map((match) => match[0])
+    .filter((row) => /<table\b|<th\b/i.test(row) === false && /<a\b[^>]*href=/i.test(row))
+    .slice(0, limit ?? 10);
+
+  const results = await Promise.all(
+    rows.map(async (row) => {
+      const link = row.match(/<td\b[^>]*>[\s\S]*?<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+      const detailUrl = absoluteUrl(htmlDecode(link?.[1]), config.baseUrl);
+      const title = cleanText(link?.[2]) ?? "Untitled";
+      const cells = tableCells(row);
+      const resolved = detailUrl
+        ? await resolveMagnetFromDetail(config, detailUrl, title)
+        : { magnet: undefined, infoHash: undefined };
+      return {
+        id: `${config.id}:${resolved.infoHash ?? detailUrl ?? title}`,
+        title,
+        publishedAt: parseDmyDate(cells[1], "+01:00"),
+        sizeBytes: parseSize(cells[2]?.replace(/s$/i, "")),
+        seeders: 1,
+        leechers: 1,
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: resolved.magnet,
+        infoHash: resolved.infoHash,
+        sourceUrl: detailUrl,
+      };
+    }),
+  );
+
+  return results.filter((result) => result.magnetUrl || result.infoHash);
+}
+
+function normalizeKickassTo(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  return [...html.matchAll(/<tr\b[\s\S]*?<\/tr>/gi)]
+    .map((match) => match[0])
+    .filter((row) => /magnet:\?xt=urn:btih:/i.test(row))
+    .slice(0, limit ?? 20)
+    .map((row) => {
+      const link = row.match(/<a\b[^>]*class=["'][^"']*cellMainLink[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+      const magnetUrl = pickMagnet(htmlDecode(row));
+      const infoHash = infoHashFromMagnet(magnetUrl);
+      const cells = tableCells(row);
+      return {
+        id: `${config.id}:${infoHash ?? htmlDecode(link?.[1]) ?? cleanText(link?.[2]) ?? ""}`,
+        title: cleanText(link?.[2]) ?? "Untitled",
+        sizeBytes: parseSize(cells[1]),
+        publishedAt: fuzzyAgoToIso(cells[2]),
+        seeders: parseCount(cells[4]),
+        leechers: parseCount(cells[5]),
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl,
+        infoHash,
+        sourceUrl: absoluteUrl(htmlDecode(link?.[1]), config.baseUrl),
+      };
+    })
+    .filter((result) => result.magnetUrl || result.infoHash);
+}
+
+function normalizeKickassWs(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  return [...html.matchAll(/<tr\b[^>]*id=["'][^"']+["'][\s\S]*?<\/tr>/gi)]
+    .map((match) => match[0])
+    .filter((row) => /data-download|magnet:\?xt=urn:btih:/i.test(row))
+    .slice(0, limit ?? 20)
+    .map((row) => {
+      const link = row.match(/<a\b[^>]*class=["']cellMainLink["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+      const download = row.match(/<a\b[^>]*(?:data-download|href)=["']([^"']+)["'][^>]*>/i);
+      const rawDownload = htmlDecode(download?.[1]);
+      const magnetUrl = pickMagnet(htmlDecode(row), queryParam(rawDownload, "url"), rawDownload);
+      const infoHash = infoHashFromMagnet(magnetUrl);
+      const cells = tableCells(row);
+      return {
+        id: `${config.id}:${infoHash ?? htmlDecode(link?.[1]) ?? cleanText(link?.[2]) ?? ""}`,
+        title: cleanText(link?.[2]) ?? "Untitled",
+        sizeBytes: parseSize(cells[1]),
+        publishedAt: fuzzyAgoToIso(cells[2]),
+        seeders: parseCount(cells[3]),
+        leechers: parseCount(cells[4]),
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl,
+        infoHash,
+        sourceUrl: absoluteUrl(htmlDecode(link?.[1]), config.baseUrl),
+      };
+    })
+    .filter((result) => result.magnetUrl || result.infoHash);
+}
+
+function normalizeLinuxTracker(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  return [...html.matchAll(/<tr\b[\s\S]*?<\/tr>/gi)]
+    .map((match) => match[0])
+    .filter((row) => /index\.php\?page=torrent-details&amp;id=|index\.php\?page=torrent-details&id=/i.test(row))
+    .slice(0, limit ?? 20)
+    .map((row) => {
+      const link = row.match(
+        /<a\b[^>]*href=["']([^"']*index\.php\?page=torrent-details(?:&amp;|&)id=[^"']+)["'][^>]*(?:title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/a>/i,
+      );
+      const href = htmlDecode(link?.[1]);
+      const title = cleanText(link?.[2]) ?? cleanText(link?.[3]) ?? "Untitled";
+      const infoHash = normalizeHash(queryParam(href, "id"));
+      const cells = tableCells(row);
+      const stats = cells.join(" ");
+      return {
+        id: `${config.id}:${infoHash ?? href ?? title}`,
+        title,
+        sizeBytes: parseSize(stats.match(/Size:\s*([^ ]+\s*[KMGT]?i?B?)/i)?.[1]),
+        seeders: parseCount(stats.match(/Seeds:\s*(\d+)/i)?.[1]),
+        leechers: parseCount(stats.match(/Leechers:\s*(\d+)/i)?.[1]),
+        publishedAt: parseDmyDate(stats.match(/(\d{2}\/\d{2}\/\d{4})/)?.[1], "-07:00"),
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: infoHash ? magnetFromInfoHash(infoHash, title) : undefined,
+        infoHash,
+        sourceUrl: absoluteUrl(href, config.baseUrl),
+      };
+    })
+    .filter((result) => result.infoHash);
+}
+
+async function normalizeMacTorrentsDownload(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): Promise<TorrentSearchResult[]> {
+  const articles = [...html.matchAll(/<article\b[\s\S]*?<\/article>/gi)]
+    .map((match) => match[0])
+    .slice(0, limit ?? 10);
+  const results = await Promise.all(
+    articles.map(async (article) => {
+      const link = article.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*(?:title=["']([^"']+)["'])?[^>]*>/i);
+      const detailUrl = absoluteUrl(htmlDecode(link?.[1]), config.baseUrl);
+      const title =
+        cleanText(link?.[2]) ??
+        cleanText(article.match(/<h2\b[\s\S]*?<\/h2>/i)?.[0]) ??
+        "Untitled";
+      const resolved = detailUrl
+        ? await resolveMagnetFromDetail(config, detailUrl, title)
+        : { magnet: undefined, infoHash: undefined };
+      return {
+        id: `${config.id}:${resolved.infoHash ?? detailUrl ?? title}`,
+        title,
+        publishedAt: toIsoDate(article.match(/<time\b[^>]*datetime=["']([^"']+)["']/i)?.[1]),
+        sizeBytes: 512 * 1024 * 1024,
+        seeders: 1,
+        leechers: 1,
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: resolved.magnet,
+        infoHash: resolved.infoHash,
+        sourceUrl: detailUrl,
+      };
+    }),
+  );
+  return results.filter((result) => result.magnetUrl || result.infoHash);
+}
+
+async function normalizeNipponsei(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): Promise<TorrentSearchResult[]> {
+  const rows = [...html.matchAll(/<tr\b[^>]*class=["'][^"']*(?:odd|even)[^"']*["'][\s\S]*?<\/tr>/gi)]
+    .map((match) => match[0])
+    .slice(0, limit ?? 20);
+  const results = await Promise.all(
+    rows.map(async (row) => {
+      const link = row.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+      const title = (cleanText(link?.[2]) ?? "Untitled").replace(/^\[Nipponsei\]\s*/i, "");
+      const downloadUrl = absoluteUrl(htmlDecode(link?.[1]), config.baseUrl);
+      const resolved = downloadUrl
+        ? await resolveMagnetFromDownload(config, downloadUrl, title)
+        : { magnet: undefined, infoHash: undefined };
+      const cells = tableCells(row);
+      return {
+        id: `${config.id}:${resolved.infoHash ?? downloadUrl ?? title}`,
+        title,
+        sizeBytes: parseSize(cells.find((cell) => /[KMGT]i?B/i.test(cell))),
+        seeders: parseCount(cells[1]),
+        leechers: parseCount(cells[2]),
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: resolved.magnet,
+        infoHash: resolved.infoHash,
+        sourceUrl: config.baseUrl,
+      };
+    }),
+  );
+  return results.filter((result) => result.magnetUrl || result.infoHash);
+}
+
+async function normalizePcTorrent(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): Promise<TorrentSearchResult[]> {
+  const blocks = splitByMarker(html, /<div\b[^>]*class=["'][^"']*dshort[^"']*["']/gi)
+    .filter((block) => /class=["'][^"']*d3-raz[^"']*["']/i.test(block))
+    .slice(0, limit ?? 10);
+  const results = await Promise.all(
+    blocks.map(async (block) => {
+      const link = block.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/i);
+      const title = cleanText(block.match(/<div\b[^>]*class=["'][^"']*d3-title[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1]) ??
+        cleanText(block.match(/<img\b[^>]*alt=["']([^"']+)["']/i)?.[1]) ??
+        "Untitled";
+      const detailUrl = absoluteUrl(htmlDecode(link?.[1]), config.baseUrl);
+      const resolved = detailUrl
+        ? await resolveMagnetFromDetail(config, detailUrl, title)
+        : { magnet: undefined, infoHash: undefined };
+      return {
+        id: `${config.id}:${resolved.infoHash ?? detailUrl ?? title}`,
+        title,
+        sizeBytes: parseSize(cleanText(block.match(/<div\b[^>]*class=["'][^"']*d3-raz[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1])),
+        seeders: 1,
+        leechers: 1,
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: resolved.magnet,
+        infoHash: resolved.infoHash,
+        sourceUrl: detailUrl,
+      };
+    }),
+  );
+  return results.filter((result) => result.magnetUrl || result.infoHash);
+}
+
+function normalizeTorrentBy(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  return [...html.matchAll(/<tr\b[^>]*class=["'][^"']*ttable_col[^"']*["'][\s\S]*?<\/tr>/gi)]
+    .map((match) => match[0])
+    .slice(0, limit ?? 20)
+    .map((row) => {
+      const link = row.match(/<td\b[\s\S]*?<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+      const magnetUrl = pickMagnet(htmlDecode(row));
+      const infoHash = infoHashFromMagnet(magnetUrl);
+      const cells = tableCells(row);
+      return {
+        id: `${config.id}:${infoHash ?? htmlDecode(link?.[1]) ?? cleanText(link?.[2]) ?? ""}`,
+        title: cleanText(link?.[2]) ?? "Untitled",
+        sizeBytes: parseSize(cells[4]),
+        seeders: parseCount(cleanText(row.match(/<font\b[^>]*color=["']green["'][^>]*>([\s\S]*?)<\/font>/i)?.[1])),
+        leechers: parseCount(cleanText(row.match(/<font\b[^>]*color=["']red["'][^>]*>([\s\S]*?)<\/font>/i)?.[1])),
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl,
+        infoHash,
+        sourceUrl: absoluteUrl(htmlDecode(link?.[1]), config.baseUrl),
+      };
+    })
+    .filter((result) => result.magnetUrl || result.infoHash);
+}
+
+async function normalizeTorrentCore(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): Promise<TorrentSearchResult[]> {
+  const blocks = splitByMarker(html, /<font\b[^>]*color=["'](?:purple|orange|gray|white)["'][^>]*>/gi)
+    .filter((block) => /<a\b/i.test(block))
+    .slice(0, limit ?? 20);
+  const results = await Promise.all(
+    blocks.map(async (block) => {
+      const link = block.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+      const href = htmlDecode(link?.[1]);
+      const title = cleanText(link?.[2]) ?? "Untitled";
+      const magnet = pickMagnet(htmlDecode(block), href);
+      const resolved = magnet
+        ? { magnet, infoHash: infoHashFromMagnet(magnet) }
+        : href
+          ? await resolveMagnetFromDownload(config, new URL(href, config.baseUrl).toString(), title)
+          : { magnet: undefined, infoHash: undefined };
+      const text = cleanText(block);
+      return {
+        id: `${config.id}:${resolved.infoHash ?? href ?? title}`,
+        title,
+        sizeBytes: parseSize(text?.match(/Size:\s*([^/]+)/i)?.[1]),
+        publishedAt: toIsoDate(text?.match(/\[\s*([^\]]+)\s*\]/)?.[1]),
+        seeders: 1,
+        leechers: 1,
+        indexerId: config.id,
+        indexerName: config.name,
+        magnetUrl: resolved.magnet,
+        infoHash: resolved.infoHash,
+        sourceUrl: href ? new URL(href, config.baseUrl).toString() : config.baseUrl,
+      };
+    }),
+  );
+  return results.filter((result) => result.magnetUrl || result.infoHash);
+}
+
 /** Pulls every magnet URI out of an HTML blob, decoding entity-escaped `&`. */
 function extractMagnets(html: string): string[] {
   return [...html.matchAll(/magnet:\?xt=urn:btih:[^\s"'<>]+/gi)].map(
@@ -828,10 +1380,76 @@ async function resolveMagnetFromDetail(
   const html = await fetchIndexerText(config, detailUrl).catch(() => "");
   const magnet = pickMagnet(...extractMagnets(html));
   const infoHash = infoHashFromMagnet(magnet) ?? infoHashFromText(html);
+  if (magnet || infoHash) {
+    return {
+      magnet: magnet ?? (infoHash ? magnetFromInfoHash(infoHash, title) : undefined),
+      infoHash,
+    };
+  }
+
+  const torrentUrl = firstTorrentDownloadUrl(html, detailUrl);
+  if (torrentUrl) {
+    return resolveMagnetFromDownload(config, torrentUrl, title);
+  }
+
   return {
     magnet: magnet ?? (infoHash ? magnetFromInfoHash(infoHash, title) : undefined),
     infoHash,
   };
+}
+
+async function resolveMagnetFromDownload(
+  config: IndexerConfig,
+  downloadUrl: string,
+  title: string | undefined,
+): Promise<{ magnet: string | undefined; infoHash: string | undefined }> {
+  const magnet = pickMagnet(downloadUrl);
+  const infoHash =
+    infoHashFromMagnet(magnet) ??
+    normalizeHash(downloadUrl.match(/([a-f0-9]{40})/i)?.[1]);
+  if (magnet || infoHash) {
+    return {
+      magnet: magnet ?? (infoHash ? magnetFromInfoHash(infoHash, title) : undefined),
+      infoHash,
+    };
+  }
+
+  try {
+    const bytes = await fetchIndexerBytes(config, downloadUrl, { timeoutMs: 20_000 });
+    const torrentInfoHash = infoHashFromTorrentBytes(bytes);
+    return {
+      magnet: torrentInfoHash ? magnetFromInfoHash(torrentInfoHash, title) : undefined,
+      infoHash: torrentInfoHash,
+    };
+  } catch {
+    return { magnet: undefined, infoHash: undefined };
+  }
+}
+
+function firstTorrentDownloadUrl(html: string, baseUrl: string): string | undefined {
+  const links = [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)]
+    .map((match) => htmlDecode(match[1]))
+    .filter((href): href is string => Boolean(href))
+    .filter((href) => {
+      const text = href.toLowerCase();
+      return (
+        text.startsWith("magnet:") ||
+        text.includes(".torrent") ||
+        text.includes("download.php") ||
+        text.includes("/download/")
+      );
+    });
+
+  for (const href of links) {
+    if (href.startsWith("magnet:")) {
+      return href;
+    }
+    const url = absoluteUrl(href.trim(), baseUrl);
+    if (url) {
+      return url;
+    }
+  }
+  return undefined;
 }
 
 function presetKeyOf(config: IndexerConfig): string | undefined {
@@ -958,6 +1576,14 @@ function cellByClass(row: string, classPrefix: string): string | undefined {
   return cleanText(match?.[1]);
 }
 
+function cellByIdPrefix(row: string, idPrefix: string): string | undefined {
+  const escaped = idPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = row.match(
+    new RegExp(`<[^>]+id=["']${escaped}[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>`, "i"),
+  );
+  return cleanText(match?.[1]);
+}
+
 function cleanText(value: string | undefined): string | undefined {
   if (!value) {
     return undefined;
@@ -983,6 +1609,136 @@ function htmlDecode(value: string | undefined): string | undefined {
 
 function infoHashFromPath(path: string): string | undefined {
   return normalizeHash(path.match(/\/([a-f0-9]{40})(?:\/|$)/i)?.[1]);
+}
+
+function absoluteUrl(value: string | undefined, baseUrl: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (value.startsWith("magnet:")) {
+    return value;
+  }
+  try {
+    return new URL(value.trim(), baseUrl).toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function queryParam(value: string | undefined, key: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  try {
+    const normalized = value.startsWith("http")
+      ? value.replace(/&amp;/g, "&")
+      : `https://example.invalid/${value.startsWith("?") ? value : `?${value}`}`;
+    return new URL(normalized).searchParams.get(key) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseDmyDate(value: string | undefined, offset: string): string | undefined {
+  const match = value?.match(/(\d{2})[/-](\d{2})[/-](\d{4})/);
+  if (!match) {
+    return undefined;
+  }
+  return toIsoDate(`${match[3]}-${match[2]}-${match[1]}T00:00:00${offset}`);
+}
+
+function infoHashFromTorrentBytes(bytes: Uint8Array): string | undefined {
+  const slice = findTorrentInfoSlice(bytes);
+  if (!slice) {
+    return undefined;
+  }
+  return createHash("sha1").update(slice).digest("hex");
+}
+
+function findTorrentInfoSlice(bytes: Uint8Array): Uint8Array | undefined {
+  if (bytes[0] !== 0x64) {
+    return undefined;
+  }
+
+  let pos = 1;
+  while (pos < bytes.length && bytes[pos] !== 0x65) {
+    const key = readBencodeString(bytes, pos);
+    if (!key) {
+      return undefined;
+    }
+    pos = key.next;
+    const valueStart = pos;
+    const valueEnd = skipBencodeValue(bytes, pos);
+    if (valueEnd === undefined) {
+      return undefined;
+    }
+    if (key.value === "info") {
+      return bytes.slice(valueStart, valueEnd);
+    }
+    pos = valueEnd;
+  }
+  return undefined;
+}
+
+function skipBencodeValue(bytes: Uint8Array, pos: number): number | undefined {
+  const token = bytes[pos];
+  if (token === 0x69) {
+    const end = bytes.indexOf(0x65, pos + 1);
+    return end === -1 ? undefined : end + 1;
+  }
+  if (token === 0x6c) {
+    pos += 1;
+    while (pos < bytes.length && bytes[pos] !== 0x65) {
+      const next = skipBencodeValue(bytes, pos);
+      if (next === undefined) {
+        return undefined;
+      }
+      pos = next;
+    }
+    return bytes[pos] === 0x65 ? pos + 1 : undefined;
+  }
+  if (token === 0x64) {
+    pos += 1;
+    while (pos < bytes.length && bytes[pos] !== 0x65) {
+      const key = readBencodeString(bytes, pos);
+      if (!key) {
+        return undefined;
+      }
+      const next = skipBencodeValue(bytes, key.next);
+      if (next === undefined) {
+        return undefined;
+      }
+      pos = next;
+    }
+    return bytes[pos] === 0x65 ? pos + 1 : undefined;
+  }
+  return readBencodeString(bytes, pos)?.next;
+}
+
+function readBencodeString(
+  bytes: Uint8Array,
+  pos: number,
+): { value: string; next: number } | undefined {
+  let colon = pos;
+  while (colon < bytes.length && bytes[colon] !== 0x3a) {
+    if (bytes[colon] < 0x30 || bytes[colon] > 0x39) {
+      return undefined;
+    }
+    colon += 1;
+  }
+  if (colon >= bytes.length) {
+    return undefined;
+  }
+  const length = Number(Buffer.from(bytes.slice(pos, colon)).toString("ascii"));
+  if (!Number.isFinite(length) || length < 0) {
+    return undefined;
+  }
+  const start = colon + 1;
+  const end = start + length;
+  if (end > bytes.length) {
+    return undefined;
+  }
+  return { value: Buffer.from(bytes.slice(start, end)).toString("utf8"), next: end };
 }
 
 function slugifySearch(query: string): string {

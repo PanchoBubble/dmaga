@@ -3,6 +3,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 
 import { SeasonEpisodes } from "@/components/season-episodes";
+import { TitleSubtitles } from "@/components/title-subtitles";
 import { TitleSources } from "@/components/title-sources";
 import { TitleViewedActions } from "@/components/title-viewed-actions";
 import { asCatalogType, buildSourceQuery } from "@/lib/metadata";
@@ -127,16 +128,19 @@ export default async function TitleDetailPage({
       {type === "series" ? (
         <SeasonEpisodes episodes={title.episodes} imdbId={title.id} name={title.name} />
       ) : (
-        <TitleSources
-          args={{
-            query: buildSourceQuery({
-              name: title.name,
-              releaseInfo: title.releaseInfo,
-            }),
-            imdbId: title.id,
-            type: "movie",
-          }}
-        />
+        <div className="space-y-8">
+          <TitleSubtitles target={{ type: "movie", imdbId: title.id }} />
+          <TitleSources
+            args={{
+              query: buildSourceQuery({
+                name: title.name,
+                releaseInfo: title.releaseInfo,
+              }),
+              imdbId: title.id,
+              type: "movie",
+            }}
+          />
+        </div>
       )}
     </div>
   );

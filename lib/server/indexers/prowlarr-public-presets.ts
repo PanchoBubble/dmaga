@@ -1001,7 +1001,7 @@ export const prowlarrPublicIndexerPresets = [
     name: "Mac Torrents Download",
     type: "cardigann",
     baseUrl: "https://www.torrentmac.net/",
-    fetchMode: "flaresolverr",
+    fetchMode: "direct",
     enabled: false,
     categories: ["apps", "games", "design-assets", "uncategorized"],
     description: "Mac Torrents Download is a Public tracker for Mac software",

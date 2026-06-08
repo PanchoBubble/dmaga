@@ -37,7 +37,7 @@ export default async function AddedPage() {
           </p>
         </div>
       ) : addedItems.length ? (
-        <section className="grid gap-4 lg:grid-cols-2">
+        <section className="grid min-w-0 gap-4 lg:grid-cols-2">
           {addedItems.map((item) => (
             <AddedItemCard item={item} key={item.id} />
           ))}
