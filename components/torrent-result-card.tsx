@@ -6,6 +6,7 @@ import {
   BookOpen,
   CheckCircle2,
   Download,
+  HardDriveDownload,
   Loader2,
   Magnet,
   Star,
@@ -61,6 +62,7 @@ export function TorrentResultCard({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const entry = useDebridStore((state) => state.entries[entryKey(result)]);
   const addToDebrid = useDebridStore((state) => state.addToDebrid);
+  const addToTorrent = useDebridStore((state) => state.addToTorrent);
   const savedEntry = useSavedStore((state) => state.entries[entryKey(result)]);
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
 
@@ -74,6 +76,9 @@ export function TorrentResultCard({
   const isReady = availability === "ready";
   const magnetHref = magnetLinkFor(result);
   const canAdd = Boolean(magnetHref || isTorrentFileUrl(result.sourceUrl));
+  // The torrent (non-debrid) path needs a magnet or info hash to hand to
+  // qBittorrent; a bare .torrent URL isn't supported there.
+  const canAddTorrent = Boolean(magnetHref || result.infoHash);
 
   const badge =
     availability === "downloading" || availability === "saved"
@@ -88,6 +93,14 @@ export function TorrentResultCard({
       if (mode === "manga" && response.primaryReadableLinkId) {
         router.push(`/reader/${response.primaryReadableLinkId}`);
       }
+    }
+  }
+
+  async function handleAddTorrent() {
+    const response = await addToTorrent(result);
+    // The torrent downloads in the background; the Added page tracks progress.
+    if (response) {
+      router.refresh();
     }
   }
 
@@ -213,6 +226,21 @@ export function TorrentResultCard({
                 />
               )}
             </Button>
+
+            {!isReady && !isAdding && canAddTorrent ? (
+              <Button
+                aria-label="Download via torrent (no Real-Debrid)"
+                className="size-9 shrink-0"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleAddTorrent();
+                }}
+                size="icon"
+                variant="outline"
+              >
+                <HardDriveDownload className="size-4" />
+              </Button>
+            ) : null}
 
             {isReady ? (
               mode === "manga" ? (

@@ -30,6 +30,19 @@ const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().default("http://localhost:3000"),
   TOKEN_ENCRYPTION_KEY: optionalSecret,
   HOST_DOWNLOAD_DIR: z.string().default("./downloads"),
+  /**
+   * qBittorrent WebUI base URL for the non-debrid torrent download path. In the
+   * Compose stack it rides the gluetun (VPN) netns, reachable at gluetun:8080.
+   * Unset/blank credentials mean the torrent path is unconfigured.
+   */
+  QBITTORRENT_URL: z.string().default("http://localhost:8080"),
+  QBITTORRENT_USERNAME: optionalSecret,
+  QBITTORRENT_PASSWORD: optionalSecret,
+  /**
+   * Directory where qBittorrent writes completed downloads, shared with the app
+   * so it can serve files from disk. Mirrors the container's /downloads mount.
+   */
+  TORRENT_DOWNLOAD_DIR: z.string().default("./downloads"),
 });
 
 export const env = envSchema.parse(process.env);

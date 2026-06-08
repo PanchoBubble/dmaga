@@ -15,6 +15,13 @@ export type DebridItemStatus =
   | "error"
   | "deleted";
 
+/**
+ * How a tracked item is delivered. Mirrors the `media_provider` Postgres enum.
+ * `real_debrid` is the original path; `torrent` is a local qBittorrent download
+ * served from disk; `direct` streams from an indexer-provided HTTP URL.
+ */
+export type MediaProvider = "real_debrid" | "torrent" | "direct";
+
 /** Fields the client sends to add a search result to Real-Debrid. */
 export type AddToDebridRequest = {
   title: string;
@@ -62,6 +69,7 @@ export type AddedItemDto = {
   sizeBytes: number | null;
   status: DebridItemStatus;
   availability: DebridAvailability;
+  provider: MediaProvider;
   progress: number;
   torrentId: string | null;
   infoHash: string | null;

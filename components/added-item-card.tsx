@@ -192,6 +192,11 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase text-muted-foreground">
               {item.indexerName} · {originSectionLabel(item.originSection)}
+              {providerLabel(item.provider) ? (
+                <span className="ml-1.5 border-2 border-foreground bg-accent px-1 py-0.5 text-[9px] text-accent-foreground">
+                  {providerLabel(item.provider)}
+                </span>
+              ) : null}
             </p>
             <h2 className="mt-2 break-words text-lg font-black leading-tight sm:text-xl">
               {item.title}
@@ -230,17 +235,19 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
             />
           </div>
 
-          <ItemActionButtons
-            downloadLinks={downloadLinks}
-            isReady={isReady}
-            item={item}
-            pendingAction={pendingAction}
-            runAction={runAction}
-          />
+          {isActive ? null : (
+            <ItemActionButtons
+              downloadLinks={downloadLinks}
+              isReady={isReady}
+              item={item}
+              pendingAction={pendingAction}
+              runAction={runAction}
+            />
+          )}
         </div>
       </div>
 
-      {isActive ? <ProgressBar className="mt-3" progress={item.progress} /> : null}
+      {isActive ? <ItemProgressPanel className="mt-3" item={item} /> : null}
 
       {item.errorMessage || error ? (
         <p className="mt-3 border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive">
@@ -352,13 +359,17 @@ export function AddedItemRow({ item }: AddedItemCardProps) {
               {error ?? item.errorMessage}
             </p>
           ) : null}
-          <ItemActionButtons
-            downloadLinks={downloadLinks}
-            isReady={isReady}
-            item={item}
-            pendingAction={pendingAction}
-            runAction={runAction}
-          />
+          {isActive ? (
+            <ItemProgressPanel item={item} />
+          ) : (
+            <ItemActionButtons
+              downloadLinks={downloadLinks}
+              isReady={isReady}
+              item={item}
+              pendingAction={pendingAction}
+              runAction={runAction}
+            />
+          )}
           {isReady && downloadLinks.length ? (
             <ItemFilesList downloadLinks={downloadLinks} />
           ) : null}
@@ -378,6 +389,17 @@ const ORIGIN_SECTION_LABELS: Record<AddedItemDto["originSection"], string> = {
 
 function originSectionLabel(section: AddedItemDto["originSection"]): string {
   return ORIGIN_SECTION_LABELS[section];
+}
+
+/** Short tag for non-Real-Debrid delivery, or null for the default RD path. */
+function providerLabel(provider: AddedItemDto["provider"]): string | null {
+  if (provider === "torrent") {
+    return "Torrent";
+  }
+  if (provider === "direct") {
+    return "Direct";
+  }
+  return null;
 }
 
 /** Primary Download / Play / Read buttons shared by the card and row layouts. */
@@ -480,6 +502,33 @@ function ItemFilesList({
   );
 }
 
+/**
+ * Detailed progress block for an active (still-downloading) item: the status
+ * label, the live percentage, and the bar. Shown in the expanded row body and
+ * the card body so an in-flight item reads as "working", not an empty panel
+ * with a lone disabled button.
+ */
+function ItemProgressPanel({
+  className,
+  item,
+}: {
+  className?: string;
+  item: AddedItemDto;
+}) {
+  return (
+    <div className={cn("space-y-2", className)}>
+      <div className="flex items-center justify-between gap-2 text-xs font-black uppercase">
+        <span className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          {debridStatusLabel(item.status)}
+        </span>
+        <span className="tabular-nums">{item.progress}%</span>
+      </div>
+      <ProgressBar progress={item.progress} />
+    </div>
+  );
+}
+
 function ProgressBar({
   className,
   progress,
@@ -530,6 +579,12 @@ function ActionsMenu({
   size?: "sm" | "default";
 }) {
   const isSm = size === "sm";
+  const isTorrent = item.provider === "torrent";
+  // Torrent items are deleted via qBittorrent (info hash), so they don't need a
+  // Real-Debrid torrent id; direct items have nothing remote to delete.
+  const showDestructiveDelete = isTorrent || item.provider === "real_debrid";
+  const canDelete = isTorrent || Boolean(item.torrentId);
+  const deleteLabel = isTorrent ? "Delete & free space" : "Delete from Real-Debrid";
 
   return (
     <div className="relative shrink-0" ref={menuRef}>
@@ -589,23 +644,25 @@ function ActionsMenu({
             )}
             Remove from Added
           </button>
-          <button
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-destructive hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
-            disabled={Boolean(pendingAction) || isRemoved || !item.torrentId}
-            onClick={() => {
-              setMenuOpen(false);
-              void runAction("delete_from_debrid");
-            }}
-            role="menuitem"
-            type="button"
-          >
-            {pendingAction === "delete_from_debrid" ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Trash2 className="size-4" />
-            )}
-            Delete from Real-Debrid
-          </button>
+          {showDestructiveDelete ? (
+            <button
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-destructive hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+              disabled={Boolean(pendingAction) || isRemoved || !canDelete}
+              onClick={() => {
+                setMenuOpen(false);
+                void runAction("delete_from_debrid");
+              }}
+              role="menuitem"
+              type="button"
+            >
+              {pendingAction === "delete_from_debrid" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              {deleteLabel}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

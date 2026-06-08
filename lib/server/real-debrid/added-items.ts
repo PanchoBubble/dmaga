@@ -6,6 +6,7 @@ import type { AddedItemDto } from "@/lib/debrid";
 import { createAuthenticatedRealDebridClient } from "@/lib/server/real-debrid/auth-service";
 import { toAvailability } from "@/lib/server/real-debrid/availability";
 import { refreshDebridLinks } from "@/lib/server/real-debrid/poller";
+import { QBittorrentClient } from "@/lib/server/torrents/qbittorrent";
 
 /** Lists locally-tracked Real-Debrid items for the Added page, newest activity first. */
 export async function listAddedItems(): Promise<AddedItemDto[]> {
@@ -20,6 +21,7 @@ export async function listAddedItems(): Promise<AddedItemDto[]> {
       sizeBytes: mediaItems.sizeBytes,
       infoHash: mediaItems.infoHash,
       status: debridItems.status,
+      provider: debridItems.provider,
       progress: debridItems.progress,
       torrentId: debridItems.realDebridTorrentId,
       errorMessage: debridItems.errorMessage,
@@ -87,6 +89,7 @@ export async function listAddedItems(): Promise<AddedItemDto[]> {
     sizeBytes: row.sizeBytes,
     status: row.status,
     availability: toAvailability(row.status),
+    provider: row.provider,
     progress: row.progress,
     torrentId: row.torrentId,
     infoHash: row.infoHash,
@@ -155,14 +158,41 @@ export async function updateAddedItemAction(
     return findRefreshedItem(id);
   }
 
-  if (action === "delete_from_debrid" && item.realDebridTorrentId) {
-    const client = await createAuthenticatedRealDebridClient();
-    await client.deleteTorrent(item.realDebridTorrentId);
+  if (action === "delete_from_debrid") {
+    if (item.provider === "torrent") {
+      await deleteTorrentFromQbittorrent(item.mediaItemId);
+    } else if (item.realDebridTorrentId) {
+      const client = await createAuthenticatedRealDebridClient();
+      await client.deleteTorrent(item.realDebridTorrentId);
+    }
   }
 
   await db.delete(debridItems).where(eq(debridItems.id, id));
 
   return null;
+}
+
+/**
+ * Removes a torrent-provider item from qBittorrent, deleting its files to free
+ * disk. Best-effort: a qBittorrent hiccup must not make the item undeletable, so
+ * failures are swallowed (the DB row is still removed by the caller).
+ */
+async function deleteTorrentFromQbittorrent(mediaItemId: string): Promise<void> {
+  const [media] = await db
+    .select({ infoHash: mediaItems.infoHash })
+    .from(mediaItems)
+    .where(eq(mediaItems.id, mediaItemId))
+    .limit(1);
+
+  if (!media?.infoHash) {
+    return;
+  }
+
+  try {
+    await new QBittorrentClient().deleteTorrent(media.infoHash, true);
+  } catch {
+    // Leave any on-disk files for manual cleanup; the item still gets removed.
+  }
 }
 
 /**

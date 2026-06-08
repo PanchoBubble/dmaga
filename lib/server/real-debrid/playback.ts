@@ -8,8 +8,14 @@ import {
   isSubtitleFile,
   type PlaybackKind,
 } from "@/lib/playback";
+import { env } from "@/lib/server/env";
 import { createAuthenticatedRealDebridClient } from "@/lib/server/real-debrid/auth-service";
 import { RealDebridApiError } from "@/lib/server/real-debrid/client";
+
+/** Absolute URL for serving a torrent-provider file off disk via /api/files. */
+export function localFileUrl(linkId: string): string {
+  return `${env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/api/files/${linkId}`;
+}
 
 export class PlaybackError extends Error {
   constructor(
@@ -107,20 +113,28 @@ export async function resolveSubtitleStream(
   return { fileName: link.fileName, url };
 }
 
-/** A resolved direct download URL for any file in a ready item. */
-export type DownloadStream = { fileName: string; url: string };
+/**
+ * A resolved direct download URL for any file in a ready item. `localPath` is
+ * set for torrent-provider files on disk, letting server-side callers (e.g. the
+ * manga reader) read bytes straight off disk instead of round-tripping HTTP.
+ */
+export type DownloadStream = {
+  fileName: string;
+  url: string;
+  localPath: string | null;
+};
 
 /**
  * Resolves any debrid link to a fresh, direct download URL — no media-kind
  * gating, so it works for archives, ISOs, subtitles, etc. Used by the download
- * route to redirect the browser straight at Real-Debrid's CDN.
+ * route to redirect the browser straight at the CDN / local file route.
  */
 export async function resolveDownloadStream(
   linkId: string,
   options: GetPlayableLinkOptions = {},
 ): Promise<DownloadStream> {
   const { link, url } = await resolveLinkStream(linkId, options);
-  return { fileName: link.fileName, url };
+  return { fileName: link.fileName, url, localPath: link.localPath };
 }
 
 type DebridLinkRow = typeof debridLinks.$inferSelect;
@@ -145,7 +159,7 @@ async function resolveLinkStream(
   }
 
   const [item] = await db
-    .select({ status: debridItems.status })
+    .select({ status: debridItems.status, provider: debridItems.provider })
     .from(debridItems)
     .where(eq(debridItems.id, link.debridItemId))
     .limit(1);
@@ -155,6 +169,19 @@ async function resolveLinkStream(
   }
   if (item.status !== "ready") {
     throw new PlaybackError("This item isn't ready to play yet.", 409);
+  }
+
+  // Torrent-provider files live on disk and are served by /api/files; direct
+  // sources stream straight from the indexer URL. Neither needs Real-Debrid.
+  if (link.localPath) {
+    return { link, url: localFileUrl(link.id) };
+  }
+  if (item.provider === "direct") {
+    const directUrl = link.unrestrictedLink ?? link.originalLink;
+    if (!directUrl) {
+      throw new PlaybackError("No streamable URL is available for this file.", 502);
+    }
+    return { link, url: directUrl };
   }
 
   const url =
