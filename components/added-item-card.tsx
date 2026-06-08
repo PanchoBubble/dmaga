@@ -15,7 +15,14 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -140,15 +147,15 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
         menuOpen && "relative z-40",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
         <div className="flex min-w-0 gap-3">
           {item.previewImageUrl ? (
-            <div className="relative aspect-[2/3] w-20 shrink-0 overflow-hidden border-2 border-foreground bg-muted sm:w-24">
+            <div className="relative aspect-[2/3] w-14 shrink-0 overflow-hidden border-2 border-foreground bg-muted sm:w-16">
               <Image
                 alt=""
                 className="object-cover"
                 fill
-                sizes="6rem"
+                sizes="4rem"
                 src={item.previewImageUrl}
                 unoptimized
               />
@@ -163,109 +170,89 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
             </h2>
           </div>
         </div>
-        <div className="flex shrink-0 items-start gap-2">
-          <StatusBadge item={item} />
-          <div className="relative" ref={menuRef}>
-            <button
-              aria-label="Added item actions"
-              aria-expanded={menuOpen}
-              aria-haspopup="menu"
-              className="inline-flex size-10 cursor-pointer list-none items-center justify-center border-2 border-foreground bg-background text-foreground shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
-              onClick={() => setMenuOpen((open) => !open)}
-              type="button"
-            >
-              <MoreHorizontal className="size-5" />
-            </button>
-            {menuOpen ? (
-              <div
-                className="absolute right-0 z-50 mt-2 w-56 border-2 border-foreground bg-popover p-1 shadow-line"
-                role="menu"
-              >
-                <button
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
-                  disabled={
-                    !isReady || !downloadLinks.length || Boolean(pendingHostDownloadId)
-                  }
-                  onClick={() => {
-                    setMenuOpen(false);
-                    if (downloadLinks[0]) {
-                      void queueHostDownload(downloadLinks[0]);
-                    }
-                  }}
-                  role="menuitem"
-                  type="button"
-                >
-                  {pendingHostDownloadId ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <ArrowDownToLine className="size-4" />
-                  )}
-                  {pendingHostDownloadId ? "Queueing host download" : "Host download"}
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
-                  disabled={Boolean(pendingAction) || isRemoved}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    void runAction("remove_local");
-                  }}
-                  role="menuitem"
-                  type="button"
-                >
-                  {pendingAction === "remove_local" ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <XCircle className="size-4" />
-                  )}
-                  Remove from Added
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-destructive hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
-                  disabled={Boolean(pendingAction) || isRemoved || !item.torrentId}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    void runAction("delete_from_debrid");
-                  }}
-                  role="menuitem"
-                  type="button"
-                >
-                  {pendingAction === "delete_from_debrid" ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="size-4" />
-                  )}
-                  Delete from Real-Debrid
-                </button>
+        <div className="flex min-w-0 flex-col gap-2 lg:ml-auto lg:w-[28rem] lg:shrink-0">
+          <div className="flex items-start justify-between gap-2">
+            <dl className="grid min-w-0 flex-1 grid-cols-2 gap-2 text-sm font-semibold">
+              <div className="border-2 border-foreground bg-background px-2 py-1">
+                <dt className="text-[10px] uppercase text-muted-foreground">Size</dt>
+                <dd className="tabular-nums">
+                  {formatBytes(item.sizeBytes ?? undefined)}
+                </dd>
               </div>
+              <div className="border-2 border-foreground bg-background px-2 py-1">
+                <dt className="text-[10px] uppercase text-muted-foreground">Added</dt>
+                <dd className="tabular-nums">
+                  {formatRelativeAge(item.addedAt ?? undefined)}
+                </dd>
+              </div>
+            </dl>
+            <StatusBadge item={item} />
+            <ActionsMenu
+              downloadLinks={downloadLinks}
+              isReady={isReady}
+              isRemoved={isRemoved}
+              item={item}
+              menuOpen={menuOpen}
+              menuRef={menuRef}
+              pendingAction={pendingAction}
+              pendingHostDownloadId={pendingHostDownloadId}
+              queueHostDownload={queueHostDownload}
+              runAction={runAction}
+              setMenuOpen={setMenuOpen}
+            />
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            {!isReady ? (
+              <Button disabled>{debridStatusLabel(item.status)}</Button>
+            ) : downloadLinks.length ? (
+              <Button asChild variant="outline">
+                <a
+                  href={`/api/debrid/links/${downloadLinks[0].id}/download`}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <Download className="size-4" />
+                  Download
+                </a>
+              </Button>
+            ) : (
+              // Ready but links not resolved yet — pull them from Real-Debrid, then
+              // the file rows and per-file Download/Play appear on refresh.
+              <Button
+                disabled={Boolean(pendingAction)}
+                onClick={() => void runAction("resolve_links")}
+                variant="outline"
+              >
+                {pendingAction === "resolve_links" ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Download className="size-4" />
+                )}
+                {pendingAction === "resolve_links" ? "Loading" : "Download"}
+              </Button>
+            )}
+            {isReady && primaryStreamLink ? (
+              <Button asChild>
+                <Link href={`/player/${primaryStreamLink.id}`}>
+                  <Play className="size-4" />
+                  Play
+                </Link>
+              </Button>
+            ) : null}
+            {isReady && primaryReadableLink ? (
+              <Button asChild>
+                <Link href={`/reader/${primaryReadableLink.id}`}>
+                  <BookOpen className="size-4" />
+                  Read
+                </Link>
+              </Button>
             ) : null}
           </div>
         </div>
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-2 text-sm font-semibold sm:mt-4">
-        <div className="border-2 border-foreground bg-background px-2 py-1">
-          <dt className="text-[10px] uppercase text-muted-foreground">Size</dt>
-          <dd className="tabular-nums">{formatBytes(item.sizeBytes ?? undefined)}</dd>
-        </div>
-        <div className="border-2 border-foreground bg-background px-2 py-1">
-          <dt className="text-[10px] uppercase text-muted-foreground">Added</dt>
-          <dd className="tabular-nums">
-            {formatRelativeAge(item.addedAt ?? undefined)}
-          </dd>
-        </div>
-      </dl>
-
-      {isActive ? (
-        <div
-          className="mt-3 h-2 w-full border-2 border-foreground bg-background"
-          aria-label={`Download progress: ${item.progress}%`}
-        >
-          <div
-            className="h-full bg-accent transition-[width]"
-            style={{ width: `${item.progress}%` }}
-          />
-        </div>
-      ) : null}
+      {isActive ? <ProgressBar progress={item.progress} /> : null}
 
       {item.errorMessage || error ? (
         <p className="mt-3 border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive">
@@ -291,54 +278,6 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
           </div>
         </div>
       ) : null}
-
-      <div className="mt-auto flex flex-wrap justify-end gap-2 pt-4">
-        {!isReady ? (
-          <Button disabled>{debridStatusLabel(item.status)}</Button>
-        ) : downloadLinks.length ? (
-          <Button asChild variant="outline">
-            <a
-              href={`/api/debrid/links/${downloadLinks[0].id}/download`}
-              rel="noreferrer"
-              target="_blank"
-            >
-              <Download className="size-4" />
-              Download
-            </a>
-          </Button>
-        ) : (
-          // Ready but links not resolved yet — pull them from Real-Debrid, then
-          // the file rows and per-file Download/Play appear on refresh.
-          <Button
-            disabled={Boolean(pendingAction)}
-            onClick={() => void runAction("resolve_links")}
-            variant="outline"
-          >
-            {pendingAction === "resolve_links" ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Download className="size-4" />
-            )}
-            {pendingAction === "resolve_links" ? "Loading" : "Download"}
-          </Button>
-        )}
-        {isReady && primaryStreamLink ? (
-          <Button asChild>
-            <Link href={`/player/${primaryStreamLink.id}`}>
-              <Play className="size-4" />
-              Play
-            </Link>
-          </Button>
-        ) : null}
-        {isReady && primaryReadableLink ? (
-          <Button asChild>
-            <Link href={`/reader/${primaryReadableLink.id}`}>
-              <BookOpen className="size-4" />
-              Read
-            </Link>
-          </Button>
-        ) : null}
-      </div>
     </article>
   );
 }
@@ -353,6 +292,125 @@ const ORIGIN_SECTION_LABELS: Record<AddedItemDto["originSection"], string> = {
 
 function originSectionLabel(section: AddedItemDto["originSection"]): string {
   return ORIGIN_SECTION_LABELS[section];
+}
+
+function ProgressBar({ progress }: { progress: number }) {
+  return (
+    <div
+      className="mt-3 h-2 w-full border-2 border-foreground bg-background"
+      aria-label={`Download progress: ${progress}%`}
+    >
+      <div
+        className="h-full bg-accent transition-[width]"
+        style={{ width: `${progress}%` }}
+      />
+    </div>
+  );
+}
+
+function ActionsMenu({
+  downloadLinks,
+  isReady,
+  isRemoved,
+  item,
+  menuOpen,
+  menuRef,
+  pendingAction,
+  pendingHostDownloadId,
+  queueHostDownload,
+  runAction,
+  setMenuOpen,
+}: {
+  downloadLinks: AddedItemLinkDto[];
+  isReady: boolean;
+  isRemoved: boolean;
+  item: AddedItemDto;
+  menuOpen: boolean;
+  menuRef: RefObject<HTMLDivElement | null>;
+  pendingAction: string | null;
+  pendingHostDownloadId: string | null;
+  queueHostDownload: (link: AddedItemLinkDto) => Promise<void>;
+  runAction: (
+    action: "remove_local" | "delete_from_debrid" | "resolve_links",
+  ) => Promise<void>;
+  setMenuOpen: Dispatch<SetStateAction<boolean>>;
+}) {
+  return (
+    <div className="relative shrink-0" ref={menuRef}>
+      <button
+        aria-label="Added item actions"
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
+        className="inline-flex size-10 cursor-pointer list-none items-center justify-center border-2 border-foreground bg-background text-foreground shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+        onClick={() => setMenuOpen((open) => !open)}
+        type="button"
+      >
+        <MoreHorizontal className="size-5" />
+      </button>
+      {menuOpen ? (
+        <div
+          className="absolute right-0 z-50 mt-2 w-56 border-2 border-foreground bg-popover p-1 shadow-line"
+          role="menu"
+        >
+          <button
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+            disabled={
+              !isReady || !downloadLinks.length || Boolean(pendingHostDownloadId)
+            }
+            onClick={() => {
+              setMenuOpen(false);
+              if (downloadLinks[0]) {
+                void queueHostDownload(downloadLinks[0]);
+              }
+            }}
+            role="menuitem"
+            type="button"
+          >
+            {pendingHostDownloadId ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <ArrowDownToLine className="size-4" />
+            )}
+            {pendingHostDownloadId ? "Queueing host download" : "Host download"}
+          </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+            disabled={Boolean(pendingAction) || isRemoved}
+            onClick={() => {
+              setMenuOpen(false);
+              void runAction("remove_local");
+            }}
+            role="menuitem"
+            type="button"
+          >
+            {pendingAction === "remove_local" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <XCircle className="size-4" />
+            )}
+            Remove from Added
+          </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-destructive hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+            disabled={Boolean(pendingAction) || isRemoved || !item.torrentId}
+            onClick={() => {
+              setMenuOpen(false);
+              void runAction("delete_from_debrid");
+            }}
+            role="menuitem"
+            type="button"
+          >
+            {pendingAction === "delete_from_debrid" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Trash2 className="size-4" />
+            )}
+            Delete from Real-Debrid
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /** Display rank per kind so playable media floats above subtitles/other files. */

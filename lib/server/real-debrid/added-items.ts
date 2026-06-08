@@ -114,6 +114,10 @@ export async function listAddedItems(): Promise<AddedItemDto[]> {
   }));
 }
 
+export async function getAddedItem(id: string): Promise<AddedItemDto | null> {
+  return (await listAddedItems()).find((item) => item.id === id) ?? null;
+}
+
 function toOriginSection(value: string): AddedItemDto["originSection"] {
   return value === "movie" || value === "show" || value === "mal" || value === "manga"
     ? value

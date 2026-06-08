@@ -109,7 +109,7 @@ export function TorrentResultCard({
       <motion.article
         animate={{ opacity: 1, y: 0 }}
         aria-label={`View details for ${result.title}`}
-        className="flex h-full min-w-0 cursor-pointer flex-col border-2 border-foreground bg-card p-3 shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-w-0 cursor-pointer flex-col border-2 border-foreground bg-card p-3 shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:flex-row lg:items-center lg:gap-4"
         initial={{ opacity: 0, y: 8 }}
         onClick={() => setDetailsOpen(true)}
         onKeyDown={(event) => {
@@ -124,18 +124,18 @@ export function TorrentResultCard({
       >
         <div className="flex min-w-0 flex-1 gap-3">
           {result.previewImageUrl ? (
-            <div className="relative aspect-[2/3] w-20 shrink-0 overflow-hidden border-2 border-foreground bg-muted sm:w-24">
+            <div className="relative aspect-[2/3] w-14 shrink-0 overflow-hidden border-2 border-foreground bg-muted sm:w-16">
               <Image
                 alt=""
                 className="object-cover"
                 fill
-                sizes="6rem"
+                sizes="4rem"
                 src={result.previewImageUrl}
                 unoptimized
               />
             </div>
           ) : null}
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-w-0 flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-4">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase text-muted-foreground">
@@ -176,47 +176,49 @@ export function TorrentResultCard({
               </Button>
             </div>
 
-            <dl className="mt-2.5 grid grid-cols-2 gap-1.5 text-sm font-semibold sm:grid-cols-4">
-              {stats.map((stat) => (
-                <div
-                  className="min-w-0 border-2 border-foreground bg-background px-2 py-1"
-                  key={stat.label}
-                >
-                  <dt className="text-[10px] uppercase text-muted-foreground">
-                    {stat.label}
-                  </dt>
-                  <dd className="truncate tabular-nums">{stat.value}</dd>
-                </div>
-              ))}
-            </dl>
+            <div className="mt-3 flex min-w-0 flex-col gap-2 lg:mt-0 lg:w-[29rem] lg:shrink-0">
+              <dl className="grid grid-cols-2 gap-1.5 text-sm font-semibold sm:grid-cols-4">
+                {stats.map((stat) => (
+                  <div
+                    className="min-w-0 border-2 border-foreground bg-background px-2 py-1"
+                    key={stat.label}
+                  >
+                    <dt className="text-[10px] uppercase text-muted-foreground">
+                      {stat.label}
+                    </dt>
+                    <dd className="truncate tabular-nums">{stat.value}</dd>
+                  </div>
+                ))}
+              </dl>
 
-            {badge ? (
-              <div
-                className={cn(
-                  "mt-2.5 inline-flex w-fit max-w-full items-center gap-2 border-2 border-foreground px-2 py-0.5 text-xs font-black",
-                  badge.className,
-                )}
-              >
-                <badge.icon
+              {badge ? (
+                <div
                   className={cn(
-                    "size-4 shrink-0",
-                    availability === "downloading" && "animate-spin",
+                    "inline-flex w-fit max-w-full items-center gap-2 border-2 border-foreground px-2 py-0.5 text-xs font-black",
+                    badge.className,
                   )}
-                />
-                {badge.label}
-                {availability === "downloading" && entry && entry.progress > 0
-                  ? ` · ${entry.progress}%`
-                  : null}
-              </div>
-            ) : null}
+                >
+                  <badge.icon
+                    className={cn(
+                      "size-4 shrink-0",
+                      availability === "downloading" && "animate-spin",
+                    )}
+                  />
+                  {badge.label}
+                  {availability === "downloading" && entry
+                    ? ` · ${entry.progress}%`
+                    : null}
+                </div>
+              ) : null}
+            </div>
 
             {entry?.status === "error" ? (
-              <p className="mt-2.5 break-words border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive">
+              <p className="mt-2.5 break-words border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive lg:col-span-2">
                 {entry.error ?? "Failed to add to Real-Debrid."}
               </p>
             ) : null}
 
-            <div className="mt-auto flex flex-wrap justify-end gap-2 pt-3">
+            <div className="mt-auto flex flex-wrap justify-end gap-2 pt-3 lg:col-span-2">
               {magnetHref ? (
                 <Button
                   asChild
@@ -265,7 +267,7 @@ export function TorrentResultCard({
                   {isAdding ? (
                     <>
                       <Loader2 className="size-4 animate-spin" />
-                      RD
+                      {entry ? `${entry.progress}%` : "0%"}
                     </>
                   ) : (
                     <>

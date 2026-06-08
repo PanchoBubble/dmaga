@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import {
   AddedItemActionError,
+  getAddedItem,
   updateAddedItemAction,
 } from "@/lib/server/real-debrid/added-items";
 import { RealDebridApiError } from "@/lib/server/real-debrid/client";
@@ -13,6 +14,22 @@ const actionSchema = z.object({
 });
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+export async function GET(_request: NextRequest, { params }: RouteContext) {
+  const { id } = await params;
+
+  try {
+    const item = await getAddedItem(id);
+    if (!item) {
+      return NextResponse.json({ error: "Added item not found." }, { status: 404 });
+    }
+    return NextResponse.json({ item });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load Added item.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
 
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const { id } = await params;

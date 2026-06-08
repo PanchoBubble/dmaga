@@ -148,7 +148,7 @@ export function TitleSources({
                     </span>
                   ) : null}
                 </div>
-                <div className="grid gap-4 lg:grid-cols-2">
+                <div className="space-y-3">
                   {group.results.map((result, index) => (
                     <TorrentResultCard
                       index={index}
@@ -162,7 +162,7 @@ export function TitleSources({
             ))}
           </section>
         ) : (
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section className="space-y-3">
             {results.map((result, index) => (
               <TorrentResultCard
                 index={index}
@@ -174,7 +174,7 @@ export function TitleSources({
           </section>
         )
       ) : !hasEmptyIndexerScope && isLoading ? (
-        <section className="grid gap-4 lg:grid-cols-2" aria-busy="true">
+        <section className="space-y-3" aria-busy="true">
           {Array.from({ length: 2 }).map((_, index) => (
             <div
               className="h-28 animate-pulse border-2 border-foreground bg-muted shadow-line"

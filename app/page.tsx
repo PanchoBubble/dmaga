@@ -57,7 +57,8 @@ export default function SearchPage() {
 
   const isLoading = status === "loading";
   const totalIndexers = availableIndexers.length;
-  const selectedCount = selectedIndexerIds === null ? totalIndexers : selectedIndexerIds.length;
+  const selectedCount =
+    selectedIndexerIds === null ? totalIndexers : selectedIndexerIds.length;
   const allIndexersSelected = selectedIndexerIds === null;
   const totalCategories = filterableMediaCategories.length;
   const selectedCategoryCount =
@@ -130,7 +131,10 @@ export default function SearchPage() {
 
           {totalIndexers > 0 ? (
             <Button
-              className={cn("ml-auto h-9 px-3 text-xs", !allIndexersSelected && "font-black")}
+              className={cn(
+                "ml-auto h-9 px-3 text-xs",
+                !allIndexersSelected && "font-black",
+              )}
               onClick={() => setFilterOpen(true)}
               size="sm"
               type="button"
@@ -269,7 +273,10 @@ function SearchBody({
   // that no longer matches (e.g. mid-stream) simply yields an empty grid.
   const indexerCounts = new Map<string, number>();
   for (const result of results) {
-    indexerCounts.set(result.indexerName, (indexerCounts.get(result.indexerName) ?? 0) + 1);
+    indexerCounts.set(
+      result.indexerName,
+      (indexerCounts.get(result.indexerName) ?? 0) + 1,
+    );
   }
   const providers = [...indexerCounts.entries()].sort((a, b) => b[1] - a[1]);
   const activeFilter =
@@ -312,14 +319,14 @@ function SearchBody({
           {indexerErrors.length ? (
             <PartialFailureNotice errors={indexerErrors} />
           ) : null}
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section className="space-y-3">
             {visibleResults.map((result, index) => (
               <TorrentResultCard index={index} key={result.id} result={result} />
             ))}
           </section>
         </>
       ) : isLoading ? (
-        <section className="grid gap-4 lg:grid-cols-2" aria-busy="true">
+        <section className="space-y-3" aria-busy="true">
           {Array.from({ length: 4 }).map((_, index) => (
             <ResultSkeleton key={index} />
           ))}
@@ -492,15 +499,17 @@ function Panel({
 
 function ResultSkeleton() {
   return (
-    <div className="flex animate-pulse flex-col gap-3 border-2 border-foreground bg-card p-4 shadow-line">
-      <div className="h-3 w-24 bg-muted" />
-      <div className="h-6 w-3/4 bg-muted" />
-      <div className="mt-2 grid grid-cols-4 gap-2">
+    <div className="flex animate-pulse flex-col gap-3 border-2 border-foreground bg-card p-3 shadow-line lg:flex-row lg:items-center">
+      <div className="h-24 w-16 shrink-0 bg-muted" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="h-3 w-24 bg-muted" />
+        <div className="h-6 w-3/4 bg-muted" />
+      </div>
+      <div className="grid gap-2 sm:grid-cols-4 lg:w-[29rem]">
         {Array.from({ length: 4 }).map((_, index) => (
           <div className="h-10 bg-muted" key={index} />
         ))}
       </div>
-      <div className="mt-2 h-10 w-32 self-end bg-muted" />
     </div>
   );
 }

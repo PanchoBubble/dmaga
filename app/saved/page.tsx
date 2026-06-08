@@ -40,7 +40,7 @@ export default async function SavedPage() {
           </p>
         </div>
       ) : savedItems.length ? (
-        <section className="grid gap-4 lg:grid-cols-2">
+        <section className="space-y-3">
           {savedItems.map((item, index) => (
             <TorrentResultCard index={index} key={item.id} result={item} />
           ))}

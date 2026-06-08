@@ -1,6 +1,11 @@
 import { create } from "zustand";
 
-import type { AddToDebridRequest, AddToDebridResponse } from "@/lib/debrid";
+import {
+  isActiveDebridStatus,
+  type AddedItemDto,
+  type AddToDebridRequest,
+  type AddToDebridResponse,
+} from "@/lib/debrid";
 import type { DebridAvailability, SearchResultDto } from "@/lib/search";
 
 /** Phase of an in-progress (or just-finished) add action for one result. */
@@ -19,6 +24,9 @@ type DebridState = {
   entries: Record<string, DebridEntry>;
   addToDebrid: (result: SearchResultDto) => Promise<AddToDebridResponse | null>;
 };
+
+const POLL_INTERVAL_MS = 2_000;
+const MAX_POLL_ATTEMPTS = 90;
 
 /** Stable key for a result: prefer the info hash so dedup'd results share state. */
 export function entryKey(result: Pick<SearchResultDto, "id" | "infoHash">): string {
@@ -88,12 +96,15 @@ export const useDebridStore = create<DebridState>((set, get) => ({
         entries: {
           ...state.entries,
           [key]: {
-            status: "done",
+            status: isActiveDebridStatus(payload.status) ? "adding" : "done",
             availability: payload.availability,
             progress: payload.progress,
           },
         },
       }));
+      if (isActiveDebridStatus(payload.status)) {
+        pollDebridEntry(key, payload.debridItemId, set);
+      }
       return payload;
     } catch (error) {
       set((state) => ({
@@ -111,3 +122,52 @@ export const useDebridStore = create<DebridState>((set, get) => ({
     }
   },
 }));
+
+function pollDebridEntry(
+  key: string,
+  debridItemId: string,
+  set: (
+    partial:
+      | DebridState
+      | Partial<DebridState>
+      | ((state: DebridState) => DebridState | Partial<DebridState>),
+  ) => void,
+  attempt = 0,
+) {
+  if (attempt >= MAX_POLL_ATTEMPTS) {
+    return;
+  }
+
+  window.setTimeout(async () => {
+    try {
+      const response = await fetch(`/api/debrid/items/${debridItemId}`);
+      const payload = (await response.json()) as
+        | { item: AddedItemDto }
+        | { error?: string };
+
+      if (!response.ok || !("item" in payload)) {
+        return;
+      }
+
+      const item = payload.item;
+      const active = isActiveDebridStatus(item.status);
+      set((state) => ({
+        entries: {
+          ...state.entries,
+          [key]: {
+            status: active ? "adding" : item.status === "error" ? "error" : "done",
+            availability: item.availability,
+            progress: item.progress,
+            error: item.errorMessage ?? undefined,
+          },
+        },
+      }));
+
+      if (active) {
+        pollDebridEntry(key, debridItemId, set, attempt + 1);
+      }
+    } catch {
+      pollDebridEntry(key, debridItemId, set, attempt + 1);
+    }
+  }, POLL_INTERVAL_MS);
+}

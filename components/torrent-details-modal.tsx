@@ -20,6 +20,7 @@ import { useSavedStore } from "@/hooks/use-saved-store";
 import {
   formatBytes,
   formatRelativeAge,
+  isTorrentFileUrl,
   magnetLinkFor,
   type DebridAvailability,
   type SearchResultDto,
@@ -70,7 +71,7 @@ export function TorrentDetailsModal({ result, onClose }: TorrentDetailsModalProp
   const isAdding = entry?.status === "adding";
   const isReady = availability === "ready";
   const magnetHref = magnetLinkFor(result);
-  const canAdd = Boolean(magnetHref);
+  const canAdd = Boolean(magnetHref || isTorrentFileUrl(result.sourceUrl));
   const badge = availability !== "unknown" ? availabilityBadge[availability] : null;
 
   // Close on Escape, matching the indexer filter modal.
@@ -156,9 +157,7 @@ export function TorrentDetailsModal({ result, onClose }: TorrentDetailsModalProp
                 )}
               />
               {badge.label}
-              {availability === "downloading" && entry && entry.progress > 0
-                ? ` · ${entry.progress}%`
-                : null}
+              {availability === "downloading" && entry ? ` · ${entry.progress}%` : null}
             </div>
           ) : null}
 
@@ -200,7 +199,9 @@ export function TorrentDetailsModal({ result, onClose }: TorrentDetailsModalProp
             {isSavePending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
-              <Star className={cn("size-4", isSaved && "fill-yellow-400 text-yellow-400")} />
+              <Star
+                className={cn("size-4", isSaved && "fill-yellow-400 text-yellow-400")}
+              />
             )}
             {isSaved ? "Saved" : "Save"}
           </Button>
@@ -229,7 +230,7 @@ export function TorrentDetailsModal({ result, onClose }: TorrentDetailsModalProp
               {isAdding ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  RD
+                  {entry ? `${entry.progress}%` : "0%"}
                 </>
               ) : (
                 <>
@@ -282,7 +283,9 @@ function CopyField({
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <p className={cn("break-all px-2 py-1.5 text-xs", mono && "font-mono")}>{value}</p>
+      <p className={cn("break-all px-2 py-1.5 text-xs", mono && "font-mono")}>
+        {value}
+      </p>
     </div>
   );
 }
