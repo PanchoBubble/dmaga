@@ -202,6 +202,16 @@ const definitions: Record<string, CardigannDefinition> = {
       return normalizeEBookBay(config, bodies.join("\n"), params.limit);
     },
   },
+  "prowlarr-public-ehentai": {
+    key: "prowlarr-public-ehentai",
+    search: async (config, params) => {
+      const url = new URL("/", config.baseUrl);
+      url.searchParams.set("f_search", params.query);
+      url.searchParams.set("f_cats", "0");
+      const html = await fetchIndexerText(config, url.toString());
+      return normalizeEHentai(config, html, params.limit);
+    },
+  },
   "prowlarr-public-eztv": {
     key: "prowlarr-public-eztv",
     search: async (config, params) => {
@@ -450,6 +460,14 @@ const definitions: Record<string, CardigannDefinition> = {
       return normalizeTorrentCore(config, html, params.limit);
     },
   },
+  "anime-tokyo-toshokan": {
+    key: "anime-tokyo-toshokan",
+    search: searchTokyoToshokan,
+  },
+  "prowlarr-public-tokyotosho": {
+    key: "prowlarr-public-tokyotosho",
+    search: searchTokyoToshokan,
+  },
 };
 
 async function searchNyaa(
@@ -462,6 +480,20 @@ async function searchNyaa(
   const category = firstCategory(params, config);
   if (category) {
     url.searchParams.set("c", category);
+  }
+  const xml = await fetchIndexerText(config, url.toString());
+  return parseRss(config, xml, params.limit);
+}
+
+async function searchTokyoToshokan(
+  config: IndexerConfig,
+  params: TorrentSearchParams,
+): Promise<TorrentSearchResult[]> {
+  const url = new URL("/rss.php", config.baseUrl);
+  url.searchParams.set("terms", params.query);
+  const category = firstCategory(params, config);
+  if (category) {
+    url.searchParams.set("type", category);
   }
   const xml = await fetchIndexerText(config, url.toString());
   return parseRss(config, xml, params.limit);
@@ -1042,6 +1074,39 @@ async function normalizeEBookBay(
   );
 
   return results.filter((result) => result.magnetUrl || result.infoHash);
+}
+
+function normalizeEHentai(
+  config: IndexerConfig,
+  html: string,
+  limit: number | undefined,
+): TorrentSearchResult[] {
+  return [...html.matchAll(/<tr\b[^>]*class=["']gtr[^"']*["'][\s\S]*?<\/tr>/gi)]
+    .map((match) => match[0])
+    .slice(0, limit ?? 20)
+    .map((row) => {
+      const link = row.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+      const detailUrl = absoluteUrl(htmlDecode(link?.[1]), config.baseUrl);
+      const title =
+        cleanText(
+          row.match(/<div\b[^>]*class=["']glink["'][^>]*>([\s\S]*?)<\/div>/i)?.[1],
+        ) ??
+        cleanText(link?.[2]) ??
+        "Untitled";
+      const cells = tableCells(row);
+
+      return {
+        id: `${config.id}:${detailUrl ?? title}`,
+        title,
+        sizeBytes: parseSize(cells.find((cell) => /[KMGT]i?B/i.test(cell))),
+        seeders: 1,
+        leechers: 0,
+        indexerId: config.id,
+        indexerName: config.name,
+        sourceUrl: detailUrl,
+      };
+    })
+    .filter((result) => result.sourceUrl);
 }
 
 async function normalizeGamesTorrents(

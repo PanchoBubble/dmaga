@@ -8,8 +8,6 @@ export type IndexerPreset = Omit<IndexerInput, "apiKey"> & {
   settings?: Record<string, unknown>;
 };
 
-const defaultCategories = ["2000", "5000"];
-
 const utilityIndexerPresets = [
   {
     presetKey: "jackett-all",
@@ -18,7 +16,7 @@ const utilityIndexerPresets = [
     baseUrl: "http://jackett:9117/api/v2.0/indexers/all/results/torznab/",
     fetchMode: "direct",
     enabled: false,
-    categories: defaultCategories,
+    categories: ["7030"],
     description: "Jackett aggregate Torznab endpoint for every configured tracker.",
     requiresApiKey: true,
   },
@@ -29,7 +27,7 @@ const utilityIndexerPresets = [
     baseUrl: "http://prowlarr:9696/api/v1/indexer/1/results/torznab/api",
     fetchMode: "direct",
     enabled: false,
-    categories: defaultCategories,
+    categories: ["7030"],
     description: "Prowlarr Torznab endpoint; edit the indexer id/path after setup.",
     requiresApiKey: true,
   },
@@ -40,7 +38,7 @@ const utilityIndexerPresets = [
     baseUrl: "https://example.com/api",
     fetchMode: "direct",
     enabled: false,
-    categories: defaultCategories,
+    categories: ["7030"],
     description: "Reusable template for any Torznab-compatible torrent indexer.",
     requiresApiKey: false,
   },
@@ -51,7 +49,7 @@ const utilityIndexerPresets = [
     baseUrl: "https://example.com/api",
     fetchMode: "flaresolverr",
     enabled: false,
-    categories: defaultCategories,
+    categories: ["7030"],
     description:
       "Template for Torznab indexers that need FlareSolverr challenge handling.",
     requiresApiKey: false,
@@ -97,14 +95,13 @@ const utilityIndexerPresets = [
 const animeIndexerPresets = [
   {
     presetKey: "anime-nyaa-si",
-    name: "Anime - Nyaa.si",
+    name: "Manga - Nyaa.si",
     type: "cardigann",
     baseUrl: "https://nyaa.si/",
     fetchMode: "direct",
     enabled: false,
-    categories: ["1_0", "1_1", "1_2", "1_3", "1_4", "2_0", "2_1", "2_2"],
-    description:
-      "Anime-focused Nyaa.si preset surfaced for quick setup. Covers anime video and audio categories.",
+    categories: ["3_0"],
+    description: "Manga-focused Nyaa.si preset using category 3_0.",
     requiresApiKey: false,
   },
   {
@@ -121,14 +118,13 @@ const animeIndexerPresets = [
   },
   {
     presetKey: "anime-tokyo-toshokan",
-    name: "Anime - Tokyo Toshokan",
+    name: "Manga - Tokyo Toshokan",
     type: "cardigann",
     baseUrl: "https://www.tokyotosho.info/",
     fetchMode: "direct",
     enabled: false,
-    categories: ["1", "3", "8", "10"],
-    description:
-      "Japanese media tracker with anime, manga, music, and batch release categories.",
+    categories: ["3"],
+    description: "Japanese media tracker manga preset using category 3.",
     requiresApiKey: false,
   },
   {
