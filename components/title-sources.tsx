@@ -8,6 +8,7 @@ import { TorrentResultCard } from "@/components/torrent-result-card";
 import { Button } from "@/components/ui/button";
 import { useSearchStore } from "@/hooks/use-search-store";
 import { useTitleSources, type TitleSourcesArgs } from "@/hooks/use-title-sources";
+import { groupMangaSourceResults } from "@/lib/manga";
 import { sortOptions, type SortKey } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +46,7 @@ export function TitleSources({
     useTitleSources(args, sortKey, selectedIndexerIds);
 
   const isLoading = status === "loading";
+  const mangaGroups = mode === "manga" ? groupMangaSourceResults(results) : [];
 
   useEffect(() => {
     hydrateSelection();
@@ -130,16 +132,47 @@ export function TitleSources({
       ) : null}
 
       {!hasEmptyIndexerScope && results.length ? (
-        <section className="grid gap-4 lg:grid-cols-2">
-          {results.map((result, index) => (
-            <TorrentResultCard
-              index={index}
-              key={result.id}
-              mode={mode}
-              result={result}
-            />
-          ))}
-        </section>
+        mode === "manga" ? (
+          <section className="space-y-5">
+            {mangaGroups.map((group) => (
+              <section className="space-y-3" key={group.key}>
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <h3 className="text-base font-black">{group.title}</h3>
+                  <span className="text-xs font-bold uppercase text-muted-foreground">
+                    {group.results.length}{" "}
+                    {group.results.length === 1 ? "source" : "sources"}
+                  </span>
+                  {group.subtitle ? (
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      {group.subtitle}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {group.results.map((result, index) => (
+                    <TorrentResultCard
+                      index={index}
+                      key={result.id}
+                      mode={mode}
+                      result={result}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </section>
+        ) : (
+          <section className="grid gap-4 lg:grid-cols-2">
+            {results.map((result, index) => (
+              <TorrentResultCard
+                index={index}
+                key={result.id}
+                mode={mode}
+                result={result}
+              />
+            ))}
+          </section>
+        )
       ) : !hasEmptyIndexerScope && isLoading ? (
         <section className="grid gap-4 lg:grid-cols-2" aria-busy="true">
           {Array.from({ length: 2 }).map((_, index) => (
