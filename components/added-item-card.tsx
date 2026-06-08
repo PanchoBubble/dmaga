@@ -5,6 +5,8 @@ import {
   ArrowDownToLine,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Download,
   Loader2,
   MoreHorizontal,
@@ -40,7 +42,12 @@ type AddedItemCardProps = {
   item: AddedItemDto;
 };
 
-export function AddedItemCard({ item }: AddedItemCardProps) {
+/**
+ * Shared mutation + menu state for an added item, consumed by both the full
+ * {@link AddedItemCard} and the slim {@link AddedItemRow} so the two layouts
+ * stay behaviourally identical.
+ */
+function useAddedItemActions(item: AddedItemDto) {
   const router = useRouter();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [pendingHostDownloadId, setPendingHostDownloadId] = useState<string | null>(
@@ -51,17 +58,6 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
   // the next card (a later grid item) paints over the dropdown menu.
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const isReady = item.status === "ready";
-  const isActive = isActiveDebridStatus(item.status);
-  const isRemoved = item.status === "deleted";
-  const downloadLinks = item.links.filter(
-    (link) => link.unrestrictedLink || link.originalLink,
-  );
-  const streamableLinks = downloadLinks.filter((link) => link.streamable);
-  const primaryStreamLink = streamableLinks[0];
-  const primaryReadableLink = downloadLinks.find((link) =>
-    isReadableMangaFile(link.fileName),
-  );
 
   async function runAction(
     action: "remove_local" | "delete_from_debrid" | "resolve_links",
@@ -139,6 +135,38 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
     };
   }, [menuOpen]);
 
+  return {
+    pendingAction,
+    pendingHostDownloadId,
+    error,
+    menuOpen,
+    setMenuOpen,
+    menuRef,
+    runAction,
+    queueHostDownload,
+  };
+}
+
+function downloadableLinks(item: AddedItemDto): AddedItemLinkDto[] {
+  return item.links.filter((link) => link.unrestrictedLink || link.originalLink);
+}
+
+export function AddedItemCard({ item }: AddedItemCardProps) {
+  const {
+    pendingAction,
+    pendingHostDownloadId,
+    error,
+    menuOpen,
+    setMenuOpen,
+    menuRef,
+    runAction,
+    queueHostDownload,
+  } = useAddedItemActions(item);
+  const isReady = item.status === "ready";
+  const isActive = isActiveDebridStatus(item.status);
+  const isRemoved = item.status === "deleted";
+  const downloadLinks = downloadableLinks(item);
+
   return (
     <article
       className={cn(
@@ -202,57 +230,17 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
             />
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2">
-            {!isReady ? (
-              <Button disabled>{debridStatusLabel(item.status)}</Button>
-            ) : downloadLinks.length ? (
-              <Button asChild variant="outline">
-                <a
-                  href={`/api/debrid/links/${downloadLinks[0].id}/download`}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <Download className="size-4" />
-                  Download
-                </a>
-              </Button>
-            ) : (
-              // Ready but links not resolved yet — pull them from Real-Debrid, then
-              // the file rows and per-file Download/Play appear on refresh.
-              <Button
-                disabled={Boolean(pendingAction)}
-                onClick={() => void runAction("resolve_links")}
-                variant="outline"
-              >
-                {pendingAction === "resolve_links" ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Download className="size-4" />
-                )}
-                {pendingAction === "resolve_links" ? "Loading" : "Download"}
-              </Button>
-            )}
-            {isReady && primaryStreamLink ? (
-              <Button asChild>
-                <Link href={`/player/${primaryStreamLink.id}`}>
-                  <Play className="size-4" />
-                  Play
-                </Link>
-              </Button>
-            ) : null}
-            {isReady && primaryReadableLink ? (
-              <Button asChild>
-                <Link href={`/reader/${primaryReadableLink.id}`}>
-                  <BookOpen className="size-4" />
-                  Read
-                </Link>
-              </Button>
-            ) : null}
-          </div>
+          <ItemActionButtons
+            downloadLinks={downloadLinks}
+            isReady={isReady}
+            item={item}
+            pendingAction={pendingAction}
+            runAction={runAction}
+          />
         </div>
       </div>
 
-      {isActive ? <ProgressBar progress={item.progress} /> : null}
+      {isActive ? <ProgressBar className="mt-3" progress={item.progress} /> : null}
 
       {item.errorMessage || error ? (
         <p className="mt-3 border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive">
@@ -261,24 +249,122 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
       ) : null}
 
       {isReady && downloadLinks.length ? (
-        <div className="mt-3">
-          <p className="mb-2 text-[10px] font-black uppercase text-muted-foreground">
-            Files ({downloadLinks.length})
-          </p>
-          <div
-            className={cn(
-              "min-w-0 space-y-2",
-              downloadLinks.length > 4 &&
-                "max-h-64 overflow-y-auto border-2 border-foreground bg-background p-2",
-            )}
-          >
-            {sortPackFiles(downloadLinks).map((link) => (
-              <PackFileRow key={link.id} link={link} />
-            ))}
-          </div>
-        </div>
+        <ItemFilesList className="mt-3" downloadLinks={downloadLinks} />
       ) : null}
     </article>
+  );
+}
+
+/**
+ * Space-efficient alternative to {@link AddedItemCard}: a single-line header
+ * (thumb, title, status, actions) that expands to reveal the same files and
+ * download/play actions — mirroring the show → episode → sources drilldown.
+ */
+export function AddedItemRow({ item }: AddedItemCardProps) {
+  const {
+    pendingAction,
+    pendingHostDownloadId,
+    error,
+    menuOpen,
+    setMenuOpen,
+    menuRef,
+    runAction,
+    queueHostDownload,
+  } = useAddedItemActions(item);
+  const [expanded, setExpanded] = useState(false);
+  const isReady = item.status === "ready";
+  const isActive = isActiveDebridStatus(item.status);
+  const isRemoved = item.status === "deleted";
+  const downloadLinks = downloadableLinks(item);
+  const detailsId = `added-row-${item.id}`;
+
+  return (
+    <div
+      className={cn(
+        "min-w-0 border-2 border-foreground bg-card shadow-line",
+        isRemoved && "opacity-70",
+        menuOpen && "relative z-40",
+      )}
+    >
+      <div className="flex items-center gap-2 p-2 sm:gap-3 sm:px-3">
+        <button
+          aria-controls={detailsId}
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-3"
+          onClick={() => setExpanded((open) => !open)}
+          type="button"
+        >
+          {expanded ? (
+            <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          )}
+          {item.previewImageUrl ? (
+            <div className="relative aspect-[2/3] w-8 shrink-0 overflow-hidden border-2 border-foreground bg-muted">
+              <Image
+                alt=""
+                className="object-cover"
+                fill
+                sizes="2rem"
+                src={item.previewImageUrl}
+                unoptimized
+              />
+            </div>
+          ) : null}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-black leading-tight">
+              {item.title}
+            </span>
+            <span className="block truncate text-[10px] font-bold uppercase text-muted-foreground">
+              {item.indexerName} · {originSectionLabel(item.originSection)}
+            </span>
+          </span>
+        </button>
+
+        <span className="hidden shrink-0 whitespace-nowrap text-right text-[11px] font-semibold tabular-nums text-muted-foreground sm:block">
+          <span className="block">{formatBytes(item.sizeBytes ?? undefined)}</span>
+          <span className="block">{formatRelativeAge(item.addedAt ?? undefined)}</span>
+        </span>
+
+        <StatusBadge item={item} size="sm" />
+        <ActionsMenu
+          downloadLinks={downloadLinks}
+          isReady={isReady}
+          isRemoved={isRemoved}
+          item={item}
+          menuOpen={menuOpen}
+          menuRef={menuRef}
+          pendingAction={pendingAction}
+          pendingHostDownloadId={pendingHostDownloadId}
+          queueHostDownload={queueHostDownload}
+          runAction={runAction}
+          setMenuOpen={setMenuOpen}
+          size="sm"
+        />
+      </div>
+
+      {isActive ? <ProgressBar progress={item.progress} /> : null}
+
+      {expanded ? (
+        <div className="space-y-3 border-t-2 border-foreground p-2 sm:p-3" id={detailsId}>
+          {item.errorMessage || error ? (
+            <p className="border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive">
+              {error ?? item.errorMessage}
+            </p>
+          ) : null}
+          <ItemActionButtons
+            downloadLinks={downloadLinks}
+            isReady={isReady}
+            item={item}
+            pendingAction={pendingAction}
+            runAction={runAction}
+          />
+          {isReady && downloadLinks.length ? (
+            <ItemFilesList downloadLinks={downloadLinks} />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -294,10 +380,116 @@ function originSectionLabel(section: AddedItemDto["originSection"]): string {
   return ORIGIN_SECTION_LABELS[section];
 }
 
-function ProgressBar({ progress }: { progress: number }) {
+/** Primary Download / Play / Read buttons shared by the card and row layouts. */
+function ItemActionButtons({
+  downloadLinks,
+  isReady,
+  item,
+  pendingAction,
+  runAction,
+}: {
+  downloadLinks: AddedItemLinkDto[];
+  isReady: boolean;
+  item: AddedItemDto;
+  pendingAction: string | null;
+  runAction: (
+    action: "remove_local" | "delete_from_debrid" | "resolve_links",
+  ) => Promise<void>;
+}) {
+  const primaryStreamLink = downloadLinks.find((link) => link.streamable);
+  const primaryReadableLink = downloadLinks.find((link) =>
+    isReadableMangaFile(link.fileName),
+  );
+
+  return (
+    <div className="flex flex-wrap justify-end gap-2">
+      {!isReady ? (
+        <Button disabled>{debridStatusLabel(item.status)}</Button>
+      ) : downloadLinks.length ? (
+        <Button asChild variant="outline">
+          <a
+            href={`/api/debrid/links/${downloadLinks[0].id}/download`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <Download className="size-4" />
+            Download
+          </a>
+        </Button>
+      ) : (
+        // Ready but links not resolved yet — pull them from Real-Debrid, then
+        // the file rows and per-file Download/Play appear on refresh.
+        <Button
+          disabled={Boolean(pendingAction)}
+          onClick={() => void runAction("resolve_links")}
+          variant="outline"
+        >
+          {pendingAction === "resolve_links" ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Download className="size-4" />
+          )}
+          {pendingAction === "resolve_links" ? "Loading" : "Download"}
+        </Button>
+      )}
+      {isReady && primaryStreamLink ? (
+        <Button asChild>
+          <Link href={`/player/${primaryStreamLink.id}`}>
+            <Play className="size-4" />
+            Play
+          </Link>
+        </Button>
+      ) : null}
+      {isReady && primaryReadableLink ? (
+        <Button asChild>
+          <Link href={`/reader/${primaryReadableLink.id}`}>
+            <BookOpen className="size-4" />
+            Read
+          </Link>
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+/** The "Files (N)" pack list shared by the card and row layouts. */
+function ItemFilesList({
+  className,
+  downloadLinks,
+}: {
+  className?: string;
+  downloadLinks: AddedItemLinkDto[];
+}) {
+  return (
+    <div className={className}>
+      <p className="mb-2 text-[10px] font-black uppercase text-muted-foreground">
+        Files ({downloadLinks.length})
+      </p>
+      <div
+        className={cn(
+          "min-w-0 space-y-2",
+          downloadLinks.length > 4 &&
+            "max-h-64 overflow-y-auto border-2 border-foreground bg-background p-2",
+        )}
+      >
+        {sortPackFiles(downloadLinks).map((link) => (
+          <PackFileRow key={link.id} link={link} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProgressBar({
+  className,
+  progress,
+}: {
+  className?: string;
+  progress: number;
+}) {
   return (
     <div
-      className="mt-3 h-2 w-full border-2 border-foreground bg-background"
+      className={cn("h-2 w-full border-2 border-foreground bg-background", className)}
       aria-label={`Download progress: ${progress}%`}
     >
       <div
@@ -320,6 +512,7 @@ function ActionsMenu({
   queueHostDownload,
   runAction,
   setMenuOpen,
+  size = "default",
 }: {
   downloadLinks: AddedItemLinkDto[];
   isReady: boolean;
@@ -334,18 +527,24 @@ function ActionsMenu({
     action: "remove_local" | "delete_from_debrid" | "resolve_links",
   ) => Promise<void>;
   setMenuOpen: Dispatch<SetStateAction<boolean>>;
+  size?: "sm" | "default";
 }) {
+  const isSm = size === "sm";
+
   return (
     <div className="relative shrink-0" ref={menuRef}>
       <button
         aria-label="Added item actions"
         aria-expanded={menuOpen}
         aria-haspopup="menu"
-        className="inline-flex size-10 cursor-pointer list-none items-center justify-center border-2 border-foreground bg-background text-foreground shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+        className={cn(
+          "inline-flex cursor-pointer list-none items-center justify-center border-2 border-foreground bg-background text-foreground shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden",
+          isSm ? "size-8" : "size-10",
+        )}
         onClick={() => setMenuOpen((open) => !open)}
         type="button"
       >
-        <MoreHorizontal className="size-5" />
+        <MoreHorizontal className={isSm ? "size-4" : "size-5"} />
       </button>
       {menuOpen ? (
         <div
@@ -541,14 +740,24 @@ function hostDownloadLabel(link: AddedItemLinkDto) {
 }
 
 /**
- * A 40px square status indicator sized to match the actions (3-dots) button:
+ * A square status indicator sized to match the actions (3-dots) button:
  * a check when ready, the live progress % while Real-Debrid pulls the asset,
  * an alert on error, and a spinner for other in-flight states.
  */
-function StatusBadge({ item }: { item: AddedItemDto }) {
+function StatusBadge({
+  item,
+  size = "default",
+}: {
+  item: AddedItemDto;
+  size?: "sm" | "default";
+}) {
   const isActive = isActiveDebridStatus(item.status);
-  const square =
-    "inline-flex size-10 shrink-0 items-center justify-center border-2 border-foreground text-xs font-black tabular-nums shadow-line";
+  const isSm = size === "sm";
+  const square = cn(
+    "inline-flex shrink-0 items-center justify-center border-2 border-foreground font-black tabular-nums shadow-line",
+    isSm ? "size-8 text-[10px]" : "size-10 text-xs",
+  );
+  const iconSize = isSm ? "size-4" : "size-5";
 
   if (item.status === "ready") {
     return (
@@ -556,7 +765,7 @@ function StatusBadge({ item }: { item: AddedItemDto }) {
         className={cn(square, "bg-secondary text-secondary-foreground")}
         title={debridStatusLabel(item.status)}
       >
-        <CheckCircle2 className="size-5" />
+        <CheckCircle2 className={iconSize} />
       </span>
     );
   }
@@ -567,7 +776,7 @@ function StatusBadge({ item }: { item: AddedItemDto }) {
         className={cn(square, "bg-destructive text-destructive-foreground")}
         title={item.errorMessage ?? debridStatusLabel(item.status)}
       >
-        <AlertTriangle className="size-5" />
+        <AlertTriangle className={iconSize} />
       </span>
     );
   }
@@ -581,7 +790,7 @@ function StatusBadge({ item }: { item: AddedItemDto }) {
         {item.progress > 0 ? (
           `${item.progress}%`
         ) : (
-          <Loader2 className="size-5 animate-spin" />
+          <Loader2 className={cn(iconSize, "animate-spin")} />
         )}
       </span>
     );
@@ -592,7 +801,7 @@ function StatusBadge({ item }: { item: AddedItemDto }) {
       className={cn(square, "bg-background text-foreground")}
       title={debridStatusLabel(item.status)}
     >
-      <ArrowDownToLine className="size-5" />
+      <ArrowDownToLine className={iconSize} />
     </span>
   );
 }
