@@ -142,6 +142,7 @@ export const mediaItems = pgTable(
     magnetUrl: text("magnet_url"),
     infoHash: text("info_hash"),
     sourceUrl: text("source_url"),
+    originSection: text("origin_section").notNull().default("other"),
     previewImageUrl: text("preview_image_url"),
     saved: boolean("saved").notNull().default(false),
     ...timestamps,

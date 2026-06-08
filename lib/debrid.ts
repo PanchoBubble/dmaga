@@ -1,4 +1,4 @@
-import type { DebridAvailability } from "@/lib/search";
+import type { DebridAvailability, MediaOriginSection } from "@/lib/search";
 
 /**
  * Granular lifecycle of a locally-tracked Real-Debrid item. Mirrors the
@@ -29,6 +29,8 @@ export type AddToDebridRequest = {
   indexerName: string;
   /** Indexer-provided source. Can be a details page or a .torrent URL. */
   sourceUrl?: string;
+  /** Section/category that produced this result. */
+  originSection?: MediaOriginSection;
 };
 
 /** Result of an add-to-Debrid action, used to transition the search UI. */
@@ -54,6 +56,7 @@ export type AddedItemDto = {
   mediaItemId: string;
   title: string;
   indexerName: string;
+  originSection: MediaOriginSection;
   sizeBytes: number | null;
   status: DebridItemStatus;
   availability: DebridAvailability;

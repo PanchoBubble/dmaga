@@ -7,6 +7,9 @@ import type { FilterableMediaCategory, MediaCategory } from "@/lib/mock-media";
  */
 export type DebridAvailability = "ready" | "downloading" | "saved" | "unknown";
 
+/** Section/category a torrent was added from, used to organize Added items. */
+export type MediaOriginSection = "movie" | "show" | "mal" | "manga" | "other";
+
 /** A normalized torrent search result as sent to the client. */
 export type SearchResultDto = {
   id: string;
@@ -25,6 +28,8 @@ export type SearchResultDto = {
   debridState: DebridAvailability;
   /** True when the user has starred (favorited) this torrent. */
   saved?: boolean;
+  /** Section/category that produced the result. */
+  originSection?: MediaOriginSection;
 };
 
 /** A single indexer that failed during a fan-out search (partial failure). */

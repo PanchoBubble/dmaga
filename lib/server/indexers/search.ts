@@ -3,6 +3,7 @@ import {
   sortBySeeders,
   type SearchResultDto,
   type SearchStreamEvent,
+  type MediaOriginSection,
 } from "@/lib/search";
 import { loadEnabledIndexerConfigs } from "@/lib/server/indexers/config";
 import { getIndexerAdapter } from "@/lib/server/indexers/registry";
@@ -80,6 +81,7 @@ export async function* streamIndexerSearch(
   params: TorrentSearchParams,
   signal?: AbortSignal,
   indexerIds?: string[],
+  originSection: MediaOriginSection = "other",
 ): AsyncGenerator<SearchStreamEvent> {
   const configs = await resolveEnabledConfigs(params, indexerIds);
   yield { type: "start", indexersTotal: configs.length };
@@ -121,7 +123,7 @@ export async function* streamIndexerSearch(
       type: "results",
       indexerId: settled.config.id,
       indexerName: settled.config.name,
-      results: await toDtosWithAvailability(settled.results ?? []),
+      results: await toDtosWithAvailability(settled.results ?? [], originSection),
     };
   }
 
@@ -243,6 +245,7 @@ function presetKeyOf(config: IndexerConfig): string | undefined {
 /** Maps normalized results to client DTOs, stamping local Real-Debrid state. */
 async function toDtosWithAvailability(
   results: TorrentSearchResult[],
+  originSection: MediaOriginSection,
 ): Promise<SearchResultDto[]> {
   const infoHashes = results
     .map((result) => result.infoHash)
@@ -252,11 +255,11 @@ async function toDtosWithAvailability(
     .filter((url): url is string => !!url);
   const [availability, sourceAvailability, savedHashes, savedSourceUrls] =
     await Promise.all([
-    getDebridAvailabilityByInfoHash(infoHashes),
-    getDebridAvailabilityBySourceUrl(sourceUrls),
-    getSavedInfoHashes(infoHashes),
-    getSavedSourceUrls(sourceUrls),
-  ]);
+      getDebridAvailabilityByInfoHash(infoHashes),
+      getDebridAvailabilityBySourceUrl(sourceUrls),
+      getSavedInfoHashes(infoHashes),
+      getSavedSourceUrls(sourceUrls),
+    ]);
 
   return results.map((result) => ({
     id: result.id,
@@ -270,6 +273,7 @@ async function toDtosWithAvailability(
     magnetUrl: result.magnetUrl,
     infoHash: result.infoHash,
     sourceUrl: result.sourceUrl,
+    originSection,
     debridState:
       (result.infoHash && availability.get(result.infoHash)) ||
       (result.sourceUrl && sourceAvailability.get(result.sourceUrl)) ||

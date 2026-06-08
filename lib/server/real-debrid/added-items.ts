@@ -15,6 +15,7 @@ export async function listAddedItems(): Promise<AddedItemDto[]> {
       mediaItemId: debridItems.mediaItemId,
       title: mediaItems.title,
       indexerName: mediaItems.indexerName,
+      originSection: mediaItems.originSection,
       sizeBytes: mediaItems.sizeBytes,
       infoHash: mediaItems.infoHash,
       status: debridItems.status,
@@ -80,6 +81,7 @@ export async function listAddedItems(): Promise<AddedItemDto[]> {
     mediaItemId: row.mediaItemId,
     title: row.title,
     indexerName: row.indexerName,
+    originSection: toOriginSection(row.originSection),
     sizeBytes: row.sizeBytes,
     status: row.status,
     availability: toAvailability(row.status),
@@ -108,6 +110,12 @@ export async function listAddedItems(): Promise<AddedItemDto[]> {
     addedAt: row.addedAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
   }));
+}
+
+function toOriginSection(value: string): AddedItemDto["originSection"] {
+  return value === "movie" || value === "show" || value === "mal" || value === "manga"
+    ? value
+    : "other";
 }
 
 export type AddedItemAction = "remove_local" | "delete_from_debrid" | "resolve_links";

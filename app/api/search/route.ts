@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import type { SearchStreamEvent } from "@/lib/search";
+import type { MediaOriginSection, SearchStreamEvent } from "@/lib/search";
 import { streamIndexerSearch } from "@/lib/server/indexers/search";
 
 const MAX_RESULTS = 200;
@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
   const imdbId = request.nextUrl.searchParams.get("imdbId")?.trim() || undefined;
   const season = parsePositiveInt(request.nextUrl.searchParams.get("season"));
   const episode = parsePositiveInt(request.nextUrl.searchParams.get("episode"));
+  const originSection = parseOriginSection(request.nextUrl.searchParams.get("origin"));
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest) {
           { query, categories, limit: MAX_RESULTS, imdbId, season, episode },
           request.signal,
           indexerIds,
+          originSection,
         )) {
           send(event);
         }
@@ -72,6 +74,12 @@ export async function GET(request: NextRequest) {
       Connection: "keep-alive",
     },
   });
+}
+
+function parseOriginSection(value: string | null): MediaOriginSection {
+  return value === "movie" || value === "show" || value === "mal" || value === "manga"
+    ? value
+    : "other";
 }
 
 /** Parses a query param as a positive integer, else undefined. */

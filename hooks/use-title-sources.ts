@@ -10,6 +10,7 @@ import {
   type SearchResultDto,
   type SearchStreamEvent,
   type SortKey,
+  type MediaOriginSection,
 } from "@/lib/search";
 
 export type TitleSourcesArgs = {
@@ -23,6 +24,8 @@ export type TitleSourcesArgs = {
   /** Season/episode, for series episode-level source lookups. */
   season?: number;
   episode?: number;
+  /** Optional override for Added grouping. */
+  originSection?: MediaOriginSection;
 };
 
 export type TitleSourcesState = {
@@ -89,6 +92,7 @@ export function useTitleSources(
     if (args.episode != null) {
       params.set("episode", String(args.episode));
     }
+    params.set("origin", args.originSection ?? originSectionFor(args.type));
     if (indexerIds) {
       for (const indexerId of indexerIds) {
         params.append("indexer", indexerId);
@@ -131,6 +135,16 @@ export function useTitleSources(
   }, [key, runId, sortKey]);
 
   return { ...state, retry };
+}
+
+function originSectionFor(type: CatalogType | "manga"): MediaOriginSection {
+  if (type === "movie") {
+    return "movie";
+  }
+  if (type === "series") {
+    return "show";
+  }
+  return "manga";
 }
 
 const initialState: TitleSourcesState = {

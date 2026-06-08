@@ -52,6 +52,7 @@ export const useDebridStore = create<DebridState>((set, get) => ({
       indexerId: result.indexerId,
       indexerName: result.indexerName,
       sourceUrl: result.sourceUrl,
+      originSection: result.originSection,
     };
 
     try {

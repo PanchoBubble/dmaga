@@ -89,6 +89,7 @@ export default async function MyAnimeListAnimePage({
           query: anime.title,
           type: "series",
           categories: ["5070"],
+          originSection: "mal",
         }}
       />
     </div>

@@ -20,6 +20,7 @@ const addRequestSchema = z
     indexerId: z.string().optional(),
     indexerName: z.string().min(1),
     sourceUrl: z.string().optional(),
+    originSection: z.enum(["movie", "show", "mal", "manga", "other"]).optional(),
   })
   .refine((value) => Boolean(value.magnetUrl || value.infoHash || value.sourceUrl), {
     message: "A magnet link, info hash, or torrent source URL is required.",

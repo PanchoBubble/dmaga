@@ -64,6 +64,13 @@
       "when": 1780855439000,
       "tag": "0008_archive_indexers",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780911992334,
+      "tag": "0009_complex_vulture",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import { mediaItems } from "@/lib/db/schema";
+import type { MediaOriginSection } from "@/lib/search";
 
 /** Common media fields shared by the add-to-Debrid and save (favorite) flows. */
 export type MediaItemInput = {
@@ -16,6 +17,7 @@ export type MediaItemInput = {
   indexerId?: string;
   indexerName: string;
   sourceUrl?: string;
+  originSection?: MediaOriginSection;
 };
 
 type MediaItemRow = typeof mediaItems.$inferSelect;
@@ -23,7 +25,9 @@ type MediaItemRow = typeof mediaItems.$inferSelect;
 const INFO_HASH_PATTERN = /xt=urn:btih:([0-9a-z]+)/i;
 
 /** Pulls the btih info hash out of a magnet URI, when present. */
-export function parseInfoHashFromMagnet(magnet: string | undefined): string | undefined {
+export function parseInfoHashFromMagnet(
+  magnet: string | undefined,
+): string | undefined {
   return magnet?.match(INFO_HASH_PATTERN)?.[1];
 }
 
@@ -56,7 +60,7 @@ export async function upsertMediaItem(
       .limit(1);
 
     if (existing) {
-      return existing;
+      return maybeUpdateOriginSection(existing, input.originSection);
     }
   }
 
@@ -68,7 +72,7 @@ export async function upsertMediaItem(
       .limit(1);
 
     if (existing) {
-      return existing;
+      return maybeUpdateOriginSection(existing, input.originSection);
     }
   }
 
@@ -86,8 +90,26 @@ export async function upsertMediaItem(
       magnetUrl: input.magnetUrl ?? null,
       infoHash,
       sourceUrl: input.sourceUrl ?? null,
+      originSection: input.originSection ?? "other",
     })
     .returning();
 
   return created;
+}
+
+async function maybeUpdateOriginSection(
+  row: MediaItemRow,
+  originSection: MediaOriginSection | undefined,
+): Promise<MediaItemRow> {
+  if (!originSection || row.originSection !== "other") {
+    return row;
+  }
+
+  const [updated] = await db
+    .update(mediaItems)
+    .set({ originSection, updatedAt: new Date() })
+    .where(eq(mediaItems.id, row.id))
+    .returning();
+
+  return updated ?? row;
 }

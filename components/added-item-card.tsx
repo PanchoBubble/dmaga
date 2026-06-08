@@ -112,7 +112,7 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase text-muted-foreground">
-            {item.indexerName}
+            {item.indexerName} · {originSectionLabel(item.originSection)}
           </p>
           <h2 className="mt-2 break-words text-lg font-black leading-tight sm:text-xl">
             {item.title}
@@ -272,6 +272,18 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
       </div>
     </article>
   );
+}
+
+const ORIGIN_SECTION_LABELS: Record<AddedItemDto["originSection"], string> = {
+  movie: "Movie",
+  show: "Show",
+  mal: "MAL",
+  manga: "Manga",
+  other: "Other",
+};
+
+function originSectionLabel(section: AddedItemDto["originSection"]): string {
+  return ORIGIN_SECTION_LABELS[section];
 }
 
 /** Display rank per kind so playable media floats above subtitles/other files. */
