@@ -46,7 +46,7 @@ const availabilityBadge: Record<
     className: "bg-accent text-accent-foreground",
   },
   saved: {
-    label: "Saved to Debrid",
+    label: "Saved",
     icon: ArrowDownToLine,
     className: "bg-background",
   },
@@ -97,19 +97,12 @@ export function TorrentResultCard({
     router.refresh();
   }
 
-  const stats = [
-    { label: "Size", value: formatBytes(result.sizeBytes) },
-    { label: "Seeds", value: formatCount(result.seeders) },
-    { label: "Peers", value: formatCount(result.leechers) },
-    { label: "Age", value: formatRelativeAge(result.publishedAt) },
-  ];
-
   return (
     <>
       <motion.article
         animate={{ opacity: 1, y: 0 }}
         aria-label={`View details for ${result.title}`}
-        className="flex min-w-0 cursor-pointer flex-col border-2 border-foreground bg-card p-3 shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:flex-row lg:items-center lg:gap-4"
+        className="flex min-w-0 cursor-pointer flex-col border-2 border-foreground bg-card p-2 shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
         initial={{ opacity: 0, y: 8 }}
         onClick={() => setDetailsOpen(true)}
         onKeyDown={(event) => {
@@ -122,142 +115,109 @@ export function TorrentResultCard({
         tabIndex={0}
         transition={{ delay: Math.min(index, 8) * 0.05 }}
       >
-        <div className="flex min-w-0 flex-1 gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {result.previewImageUrl ? (
-            <div className="relative aspect-[2/3] w-14 shrink-0 overflow-hidden border-2 border-foreground bg-muted sm:w-16">
+            <div className="relative aspect-[2/3] w-9 shrink-0 overflow-hidden border-2 border-foreground bg-muted sm:w-10">
               <Image
                 alt=""
                 className="object-cover"
                 fill
-                sizes="4rem"
+                sizes="2.5rem"
                 src={result.previewImageUrl}
                 unoptimized
               />
             </div>
           ) : null}
-          <div className="flex min-w-0 flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase text-muted-foreground">
-                  <Users className="size-3 shrink-0" />
-                  <span className="truncate">{result.indexerName}</span>
-                </p>
-                <h2 className="mt-1 line-clamp-2 break-words text-base font-black leading-tight sm:text-lg">
-                  {result.displayTitle ?? result.title}
-                </h2>
-                {result.displayTitle ? (
-                  <p className="mt-1 line-clamp-1 text-xs font-semibold text-muted-foreground">
-                    {result.title}
-                  </p>
-                ) : null}
-              </div>
+
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-sm font-black leading-tight sm:text-base">
+              {result.displayTitle ?? result.title}
+            </h2>
+            <p className="flex items-center gap-x-1.5 overflow-hidden whitespace-nowrap text-[10px] font-bold uppercase text-muted-foreground">
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <Users className="size-3 shrink-0" />
+                <span className="truncate">{result.indexerName}</span>
+              </span>
+              <span aria-hidden>·</span>
+              <span className="shrink-0 tabular-nums">
+                {formatBytes(result.sizeBytes)}
+              </span>
+              <span aria-hidden>·</span>
+              <span className="shrink-0 tabular-nums">
+                ▲{formatCount(result.seeders)}
+              </span>
+              <span aria-hidden className="hidden sm:inline">
+                ·
+              </span>
+              <span className="hidden shrink-0 tabular-nums sm:inline">
+                {formatRelativeAge(result.publishedAt)}
+              </span>
+            </p>
+          </div>
+
+          {badge ? (
+            <span
+              className={cn(
+                "hidden shrink-0 items-center gap-1 border-2 border-foreground px-1.5 py-0.5 text-[10px] font-black sm:inline-flex",
+                badge.className,
+              )}
+            >
+              <badge.icon
+                className={cn(
+                  "size-3.5 shrink-0",
+                  availability === "downloading" && "animate-spin",
+                )}
+              />
+              {availability === "downloading" && entry
+                ? `${entry.progress}%`
+                : badge.label}
+            </span>
+          ) : null}
+
+          <div className="flex shrink-0 items-center gap-1.5">
+            {magnetHref ? (
               <Button
-                aria-label={isSaved ? "Remove from saved" : "Save torrent"}
-                aria-pressed={isSaved}
+                aria-label="Magnet link"
+                asChild
                 className="size-9 shrink-0"
-                disabled={isSavePending}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void handleToggleSaved();
-                }}
+                onClick={(event) => event.stopPropagation()}
                 size="icon"
                 variant="outline"
               >
-                {isSavePending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Star
-                    className={cn(
-                      "size-4",
-                      isSaved && "fill-yellow-400 text-yellow-400",
-                    )}
-                  />
-                )}
+                <a href={magnetHref}>
+                  <Magnet className="size-4" />
+                </a>
               </Button>
-            </div>
-
-            <div className="mt-3 flex min-w-0 flex-col gap-2 lg:mt-0 lg:w-[29rem] lg:shrink-0">
-              <dl className="grid grid-cols-2 gap-1.5 text-sm font-semibold sm:grid-cols-4">
-                {stats.map((stat) => (
-                  <div
-                    className="min-w-0 border-2 border-foreground bg-background px-2 py-1"
-                    key={stat.label}
-                  >
-                    <dt className="text-[10px] uppercase text-muted-foreground">
-                      {stat.label}
-                    </dt>
-                    <dd className="truncate tabular-nums">{stat.value}</dd>
-                  </div>
-                ))}
-              </dl>
-
-              {badge ? (
-                <div
-                  className={cn(
-                    "inline-flex w-fit max-w-full items-center gap-2 border-2 border-foreground px-2 py-0.5 text-xs font-black",
-                    badge.className,
-                  )}
-                >
-                  <badge.icon
-                    className={cn(
-                      "size-4 shrink-0",
-                      availability === "downloading" && "animate-spin",
-                    )}
-                  />
-                  {badge.label}
-                  {availability === "downloading" && entry
-                    ? ` · ${entry.progress}%`
-                    : null}
-                </div>
-              ) : null}
-            </div>
-
-            {entry?.status === "error" ? (
-              <p className="mt-2.5 break-words border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive lg:col-span-2">
-                {entry.error ?? "Failed to add to Real-Debrid."}
-              </p>
             ) : null}
 
-            <div className="mt-auto flex flex-wrap justify-end gap-2 pt-3 lg:col-span-2">
-              {magnetHref ? (
-                <Button
-                  asChild
-                  onClick={(event) => event.stopPropagation()}
-                  size="sm"
-                  variant="outline"
-                >
-                  <a href={magnetHref}>
-                    <Magnet className="size-4" />
-                    Magnet
-                  </a>
-                </Button>
-              ) : null}
-              {isReady ? (
-                mode === "manga" ? (
-                  <Button
-                    disabled={isAdding}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void handleAdd();
-                    }}
-                    size="sm"
-                  >
-                    {isAdding ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <BookOpen className="size-4" />
-                    )}
-                    Read
-                  </Button>
-                ) : (
-                  <Button onClick={(event) => event.stopPropagation()} size="sm">
-                    <Download className="size-4" />
-                    Download
-                  </Button>
-                )
+            <Button
+              aria-label={isSaved ? "Remove from saved" : "Save torrent"}
+              aria-pressed={isSaved}
+              className="size-9 shrink-0"
+              disabled={isSavePending}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleToggleSaved();
+              }}
+              size="icon"
+              variant="outline"
+            >
+              {isSavePending ? (
+                <Loader2 className="size-4 animate-spin" />
               ) : (
+                <Star
+                  className={cn(
+                    "size-4",
+                    isSaved && "fill-yellow-400 text-yellow-400",
+                  )}
+                />
+              )}
+            </Button>
+
+            {isReady ? (
+              mode === "manga" ? (
                 <Button
-                  disabled={!canAdd || isAdding}
+                  disabled={isAdding}
                   onClick={(event) => {
                     event.stopPropagation();
                     void handleAdd();
@@ -265,25 +225,55 @@ export function TorrentResultCard({
                   size="sm"
                 >
                   {isAdding ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" />
-                      {entry ? `${entry.progress}%` : "0%"}
-                    </>
+                    <Loader2 className="size-4 animate-spin" />
                   ) : (
-                    <>
-                      <Upload className="size-4" />
-                      {entry?.status === "error"
-                        ? "Retry"
-                        : mode === "manga"
-                          ? "Read"
-                          : "RD"}
-                    </>
+                    <BookOpen className="size-4" />
                   )}
+                  Read
                 </Button>
-              )}
-            </div>
+              ) : (
+                <Button
+                  onClick={(event) => event.stopPropagation()}
+                  size="sm"
+                >
+                  <Download className="size-4" />
+                  <span className="hidden sm:inline">Download</span>
+                </Button>
+              )
+            ) : (
+              <Button
+                disabled={!canAdd || isAdding}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleAdd();
+                }}
+                size="sm"
+              >
+                {isAdding ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    {entry ? `${entry.progress}%` : "0%"}
+                  </>
+                ) : (
+                  <>
+                    <Upload className="size-4" />
+                    {entry?.status === "error"
+                      ? "Retry"
+                      : mode === "manga"
+                        ? "Read"
+                        : "RD"}
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
+
+        {entry?.status === "error" ? (
+          <p className="mt-2 break-words border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive">
+            {entry.error ?? "Failed to add to Real-Debrid."}
+          </p>
+        ) : null}
       </motion.article>
       {detailsOpen ? (
         <TorrentDetailsModal onClose={() => setDetailsOpen(false)} result={result} />

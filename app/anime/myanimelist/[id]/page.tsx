@@ -2,8 +2,10 @@ import { ExternalLink, Star, Tv } from "lucide-react";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 
+import { AnimeEpisodes } from "@/components/anime-episodes";
 import { TitleSources } from "@/components/title-sources";
 import { Button } from "@/components/ui/button";
+import { fetchAnimeEpisodes } from "@/lib/server/metadata/jikan-anime";
 import { getMyAnimeListAnime } from "@/lib/server/myanimelist/auth-service";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,8 @@ export default async function MyAnimeListAnimePage({
   if (!anime) {
     notFound();
   }
+
+  const episodes = await fetchAnimeEpisodes(animeId, anime.episodes);
 
   return (
     <div className="space-y-8">
@@ -84,16 +88,24 @@ export default async function MyAnimeListAnimePage({
         </div>
       </header>
 
-      <TitleSources
-        args={{
-          query: anime.title,
-          displayTitle: anime.title,
-          previewImageUrl: anime.picture,
-          type: "series",
-          categories: ["5070"],
-          originSection: "mal",
-        }}
-      />
+      {episodes.length ? (
+        <AnimeEpisodes
+          episodes={episodes}
+          poster={anime.picture}
+          title={anime.title}
+        />
+      ) : (
+        <TitleSources
+          args={{
+            query: anime.title,
+            displayTitle: anime.title,
+            previewImageUrl: anime.picture,
+            type: "series",
+            categories: ["5070"],
+            originSection: "mal",
+          }}
+        />
+      )}
     </div>
   );
 }
