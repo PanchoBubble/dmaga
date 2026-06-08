@@ -42,7 +42,8 @@ export const useDebridStore = create<DebridState>((set, get) => ({
     }));
 
     const body: AddToDebridRequest = {
-      title: result.title,
+      title: result.displayTitle ?? result.title,
+      previewImageUrl: result.previewImageUrl,
       infoHash: result.infoHash,
       magnetUrl: result.magnetUrl,
       sizeBytes: result.sizeBytes,

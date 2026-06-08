@@ -12,6 +12,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -140,13 +141,27 @@ export function AddedItemCard({ item }: AddedItemCardProps) {
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase text-muted-foreground">
-            {item.indexerName} · {originSectionLabel(item.originSection)}
-          </p>
-          <h2 className="mt-2 break-words text-lg font-black leading-tight sm:text-xl">
-            {item.title}
-          </h2>
+        <div className="flex min-w-0 gap-3">
+          {item.previewImageUrl ? (
+            <div className="relative aspect-[2/3] w-20 shrink-0 overflow-hidden border-2 border-foreground bg-muted sm:w-24">
+              <Image
+                alt=""
+                className="object-cover"
+                fill
+                sizes="6rem"
+                src={item.previewImageUrl}
+                unoptimized
+              />
+            </div>
+          ) : null}
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase text-muted-foreground">
+              {item.indexerName} · {originSectionLabel(item.originSection)}
+            </p>
+            <h2 className="mt-2 break-words text-lg font-black leading-tight sm:text-xl">
+              {item.title}
+            </h2>
+          </div>
         </div>
         <div className="flex shrink-0 items-start gap-2">
           <StatusBadge item={item} />

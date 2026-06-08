@@ -1,6 +1,7 @@
 /** Fields the client sends to star (favorite) or unstar a search result. */
 export type SetSavedRequest = {
   title: string;
+  previewImageUrl?: string;
   infoHash?: string;
   magnetUrl?: string;
   sizeBytes?: number;

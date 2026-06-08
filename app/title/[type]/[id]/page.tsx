@@ -126,7 +126,12 @@ export default async function TitleDetailPage({
       </header>
 
       {type === "series" ? (
-        <SeasonEpisodes episodes={title.episodes} imdbId={title.id} name={title.name} />
+        <SeasonEpisodes
+          episodes={title.episodes}
+          imdbId={title.id}
+          name={title.name}
+          poster={title.poster}
+        />
       ) : (
         <div className="space-y-8">
           <TitleSubtitles target={{ type: "movie", imdbId: title.id }} />
@@ -136,6 +141,8 @@ export default async function TitleDetailPage({
                 name: title.name,
                 releaseInfo: title.releaseInfo,
               }),
+              displayTitle: title.name,
+              previewImageUrl: title.poster,
               imdbId: title.id,
               type: "movie",
             }}

@@ -15,10 +15,12 @@ import { cn } from "@/lib/utils";
 export function SeasonEpisodes({
   imdbId,
   name,
+  poster,
   episodes,
 }: {
   imdbId: string;
   name: string;
+  poster?: string;
   episodes: EpisodeInfo[];
 }) {
   // Group episodes by season, preserving sorted order.
@@ -115,6 +117,8 @@ export function SeasonEpisodes({
                         season: episode.season,
                         episode: episode.episode,
                       }),
+                      displayTitle: name,
+                      previewImageUrl: poster,
                       imdbId,
                       type: "series",
                       season: episode.season,

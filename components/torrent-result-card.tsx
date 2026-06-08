@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useState } from "react";
 
 import { TorrentDetailsModal } from "@/components/torrent-details-modal";
@@ -121,97 +122,140 @@ export function TorrentResultCard({
         tabIndex={0}
         transition={{ delay: Math.min(index, 8) * 0.05 }}
       >
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase text-muted-foreground">
-                <Users className="size-3 shrink-0" />
-                <span className="truncate">{result.indexerName}</span>
-              </p>
-              <h2 className="mt-1 line-clamp-2 break-words text-base font-black leading-tight sm:text-lg">
-                {result.title}
-              </h2>
-            </div>
-            <Button
-              aria-label={isSaved ? "Remove from saved" : "Save torrent"}
-              aria-pressed={isSaved}
-              className="size-9 shrink-0"
-              disabled={isSavePending}
-              onClick={(event) => {
-                event.stopPropagation();
-                void handleToggleSaved();
-              }}
-              size="icon"
-              variant="outline"
-            >
-              {isSavePending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Star
-                  className={cn("size-4", isSaved && "fill-yellow-400 text-yellow-400")}
-                />
-              )}
-            </Button>
-          </div>
-
-          <dl className="mt-2.5 grid grid-cols-2 gap-1.5 text-sm font-semibold sm:grid-cols-4">
-            {stats.map((stat) => (
-              <div
-                className="min-w-0 border-2 border-foreground bg-background px-2 py-1"
-                key={stat.label}
-              >
-                <dt className="text-[10px] uppercase text-muted-foreground">
-                  {stat.label}
-                </dt>
-                <dd className="truncate tabular-nums">{stat.value}</dd>
-              </div>
-            ))}
-          </dl>
-
-          {badge ? (
-            <div
-              className={cn(
-                "mt-2.5 inline-flex w-fit max-w-full items-center gap-2 border-2 border-foreground px-2 py-0.5 text-xs font-black",
-                badge.className,
-              )}
-            >
-              <badge.icon
-                className={cn(
-                  "size-4 shrink-0",
-                  availability === "downloading" && "animate-spin",
-                )}
+        <div className="flex min-w-0 flex-1 gap-3">
+          {result.previewImageUrl ? (
+            <div className="relative aspect-[2/3] w-20 shrink-0 overflow-hidden border-2 border-foreground bg-muted sm:w-24">
+              <Image
+                alt=""
+                className="object-cover"
+                fill
+                sizes="6rem"
+                src={result.previewImageUrl}
+                unoptimized
               />
-              {badge.label}
-              {availability === "downloading" && entry && entry.progress > 0
-                ? ` · ${entry.progress}%`
-                : null}
             </div>
           ) : null}
-
-          {entry?.status === "error" ? (
-            <p className="mt-2.5 break-words border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive">
-              {entry.error ?? "Failed to add to Real-Debrid."}
-            </p>
-          ) : null}
-
-          <div className="mt-auto flex flex-wrap justify-end gap-2 pt-3">
-            {magnetHref ? (
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase text-muted-foreground">
+                  <Users className="size-3 shrink-0" />
+                  <span className="truncate">{result.indexerName}</span>
+                </p>
+                <h2 className="mt-1 line-clamp-2 break-words text-base font-black leading-tight sm:text-lg">
+                  {result.displayTitle ?? result.title}
+                </h2>
+                {result.displayTitle ? (
+                  <p className="mt-1 line-clamp-1 text-xs font-semibold text-muted-foreground">
+                    {result.title}
+                  </p>
+                ) : null}
+              </div>
               <Button
-                asChild
-                onClick={(event) => event.stopPropagation()}
-                size="sm"
+                aria-label={isSaved ? "Remove from saved" : "Save torrent"}
+                aria-pressed={isSaved}
+                className="size-9 shrink-0"
+                disabled={isSavePending}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleToggleSaved();
+                }}
+                size="icon"
                 variant="outline"
               >
-                <a href={magnetHref}>
-                  <Magnet className="size-4" />
-                  Magnet
-                </a>
+                {isSavePending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Star
+                    className={cn(
+                      "size-4",
+                      isSaved && "fill-yellow-400 text-yellow-400",
+                    )}
+                  />
+                )}
               </Button>
+            </div>
+
+            <dl className="mt-2.5 grid grid-cols-2 gap-1.5 text-sm font-semibold sm:grid-cols-4">
+              {stats.map((stat) => (
+                <div
+                  className="min-w-0 border-2 border-foreground bg-background px-2 py-1"
+                  key={stat.label}
+                >
+                  <dt className="text-[10px] uppercase text-muted-foreground">
+                    {stat.label}
+                  </dt>
+                  <dd className="truncate tabular-nums">{stat.value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {badge ? (
+              <div
+                className={cn(
+                  "mt-2.5 inline-flex w-fit max-w-full items-center gap-2 border-2 border-foreground px-2 py-0.5 text-xs font-black",
+                  badge.className,
+                )}
+              >
+                <badge.icon
+                  className={cn(
+                    "size-4 shrink-0",
+                    availability === "downloading" && "animate-spin",
+                  )}
+                />
+                {badge.label}
+                {availability === "downloading" && entry && entry.progress > 0
+                  ? ` · ${entry.progress}%`
+                  : null}
+              </div>
             ) : null}
-            {isReady ? (
-              mode === "manga" ? (
+
+            {entry?.status === "error" ? (
+              <p className="mt-2.5 break-words border-2 border-destructive bg-background px-2 py-1 text-xs font-bold text-destructive">
+                {entry.error ?? "Failed to add to Real-Debrid."}
+              </p>
+            ) : null}
+
+            <div className="mt-auto flex flex-wrap justify-end gap-2 pt-3">
+              {magnetHref ? (
                 <Button
-                  disabled={isAdding}
+                  asChild
+                  onClick={(event) => event.stopPropagation()}
+                  size="sm"
+                  variant="outline"
+                >
+                  <a href={magnetHref}>
+                    <Magnet className="size-4" />
+                    Magnet
+                  </a>
+                </Button>
+              ) : null}
+              {isReady ? (
+                mode === "manga" ? (
+                  <Button
+                    disabled={isAdding}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleAdd();
+                    }}
+                    size="sm"
+                  >
+                    {isAdding ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <BookOpen className="size-4" />
+                    )}
+                    Read
+                  </Button>
+                ) : (
+                  <Button onClick={(event) => event.stopPropagation()} size="sm">
+                    <Download className="size-4" />
+                    Download
+                  </Button>
+                )
+              ) : (
+                <Button
+                  disabled={!canAdd || isAdding}
                   onClick={(event) => {
                     event.stopPropagation();
                     void handleAdd();
@@ -219,44 +263,23 @@ export function TorrentResultCard({
                   size="sm"
                 >
                   {isAdding ? (
-                    <Loader2 className="size-4 animate-spin" />
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      RD
+                    </>
                   ) : (
-                    <BookOpen className="size-4" />
+                    <>
+                      <Upload className="size-4" />
+                      {entry?.status === "error"
+                        ? "Retry"
+                        : mode === "manga"
+                          ? "Read"
+                          : "RD"}
+                    </>
                   )}
-                  Read
                 </Button>
-              ) : (
-                <Button onClick={(event) => event.stopPropagation()} size="sm">
-                  <Download className="size-4" />
-                  Download
-                </Button>
-              )
-            ) : (
-              <Button
-                disabled={!canAdd || isAdding}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void handleAdd();
-                }}
-                size="sm"
-              >
-                {isAdding ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" />
-                    RD
-                  </>
-                ) : (
-                  <>
-                    <Upload className="size-4" />
-                    {entry?.status === "error"
-                      ? "Retry"
-                      : mode === "manga"
-                        ? "Read"
-                        : "RD"}
-                  </>
-                )}
-              </Button>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </motion.article>

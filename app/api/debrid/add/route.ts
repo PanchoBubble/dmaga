@@ -11,6 +11,7 @@ import { RealDebridAuthError } from "@/lib/server/real-debrid/auth-service";
 const addRequestSchema = z
   .object({
     title: z.string().min(1),
+    previewImageUrl: z.string().url().optional(),
     infoHash: z.string().min(1).optional(),
     magnetUrl: z.string().min(1).optional(),
     sizeBytes: z.number().nonnegative().optional(),

@@ -12,9 +12,7 @@ import { toAvailability } from "@/lib/server/real-debrid/availability";
  * the user has never added before becomes trackable) and flips its `saved`
  * flag. Idempotent: re-saving an already-saved item is a no-op write.
  */
-export async function setSavedState(
-  input: SetSavedRequest,
-): Promise<SetSavedResponse> {
+export async function setSavedState(input: SetSavedRequest): Promise<SetSavedResponse> {
   const infoHash = resolveInfoHash(input);
   const mediaItem = await upsertMediaItem(input, infoHash);
 
@@ -38,6 +36,7 @@ export async function listSavedItems(): Promise<SearchResultDto[]> {
     .select({
       id: mediaItems.id,
       title: mediaItems.title,
+      previewImageUrl: mediaItems.previewImageUrl,
       sizeBytes: mediaItems.sizeBytes,
       seeders: mediaItems.seeders,
       leechers: mediaItems.leechers,
@@ -57,6 +56,7 @@ export async function listSavedItems(): Promise<SearchResultDto[]> {
   return rows.map((row) => ({
     id: row.infoHash ?? row.id,
     title: row.title,
+    previewImageUrl: row.previewImageUrl ?? undefined,
     sizeBytes: row.sizeBytes ?? undefined,
     seeders: row.seeders ?? undefined,
     leechers: row.leechers ?? undefined,
@@ -75,9 +75,7 @@ export async function listSavedItems(): Promise<SearchResultDto[]> {
  * Returns the subset of the given info hashes that are currently saved, so a
  * fresh search can render the star pre-filled. Empty input skips the query.
  */
-export async function getSavedInfoHashes(
-  infoHashes: string[],
-): Promise<Set<string>> {
+export async function getSavedInfoHashes(infoHashes: string[]): Promise<Set<string>> {
   const unique = [...new Set(infoHashes.filter(Boolean))];
   if (unique.length === 0) {
     return new Set();
@@ -102,7 +100,9 @@ export async function getSavedSourceUrls(sourceUrls: string[]): Promise<Set<stri
     .from(mediaItems)
     .where(and(eq(mediaItems.saved, true), inArray(mediaItems.sourceUrl, unique)));
 
-  return new Set(rows.map((row) => row.sourceUrl).filter((url): url is string => !!url));
+  return new Set(
+    rows.map((row) => row.sourceUrl).filter((url): url is string => !!url),
+  );
 }
 
 /** Counts saved torrents for the Saved nav badge. */

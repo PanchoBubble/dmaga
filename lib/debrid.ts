@@ -18,6 +18,7 @@ export type DebridItemStatus =
 /** Fields the client sends to add a search result to Real-Debrid. */
 export type AddToDebridRequest = {
   title: string;
+  previewImageUrl?: string;
   infoHash?: string;
   magnetUrl?: string;
   sizeBytes?: number;
@@ -55,6 +56,7 @@ export type AddedItemDto = {
   id: string;
   mediaItemId: string;
   title: string;
+  previewImageUrl: string | null;
   indexerName: string;
   originSection: MediaOriginSection;
   sizeBytes: number | null;

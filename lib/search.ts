@@ -14,6 +14,10 @@ export type MediaOriginSection = "movie" | "show" | "mal" | "manga" | "other";
 export type SearchResultDto = {
   id: string;
   title: string;
+  /** Optional clean content title for title-page sourced torrents. */
+  displayTitle?: string;
+  /** Poster/cover image captured from Discover/title metadata, when available. */
+  previewImageUrl?: string;
   sizeBytes?: number;
   seeders?: number;
   leechers?: number;

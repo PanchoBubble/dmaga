@@ -91,11 +91,17 @@ export default async function MangaTitlePage({ params }: MangaTitlePageProps) {
       </section>
 
       {item.volumes ? (
-        <MangaVolumes title={item.title} totalVolumes={item.volumes} />
+        <MangaVolumes
+          poster={item.poster}
+          title={item.title}
+          totalVolumes={item.volumes}
+        />
       ) : (
         <TitleSources
           args={{
             query: item.query,
+            displayTitle: item.title,
+            previewImageUrl: item.poster,
             type: "manga",
             categories: ["7030"],
           }}

@@ -16,6 +16,10 @@ import {
 export type TitleSourcesArgs = {
   /** Keyword query for keyword indexers (Torznab/Cardigann). */
   query: string;
+  /** Clean title to save for title-page sourced torrents. */
+  displayTitle?: string;
+  /** Poster/cover to save with title-page sourced torrents. */
+  previewImageUrl?: string;
   /** IMDB id for id-aware indexers (Torrentio); skips their Cinemeta lookup. */
   imdbId?: string;
   type: CatalogType | "manga";
@@ -114,7 +118,7 @@ export function useTitleSources(
           return;
         }
         await consumeStream(response.body, (event) =>
-          setState((prev) => applyEvent(prev, event, sortKey)),
+          setState((prev) => applyEvent(prev, decorateEvent(event, args), sortKey)),
         );
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -135,6 +139,24 @@ export function useTitleSources(
   }, [key, runId, sortKey]);
 
   return { ...state, retry };
+}
+
+function decorateEvent(
+  event: SearchStreamEvent,
+  args: TitleSourcesArgs,
+): SearchStreamEvent {
+  if (event.type !== "results") {
+    return event;
+  }
+
+  return {
+    ...event,
+    results: event.results.map((result) => ({
+      ...result,
+      displayTitle: args.displayTitle,
+      previewImageUrl: args.previewImageUrl,
+    })),
+  };
 }
 
 function originSectionFor(type: CatalogType | "manga"): MediaOriginSection {

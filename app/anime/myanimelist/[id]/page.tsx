@@ -87,6 +87,8 @@ export default async function MyAnimeListAnimePage({
       <TitleSources
         args={{
           query: anime.title,
+          displayTitle: anime.title,
+          previewImageUrl: anime.picture,
           type: "series",
           categories: ["5070"],
           originSection: "mal",

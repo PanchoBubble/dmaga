@@ -7,6 +7,7 @@ import type { MediaOriginSection } from "@/lib/search";
 /** Common media fields shared by the add-to-Debrid and save (favorite) flows. */
 export type MediaItemInput = {
   title: string;
+  previewImageUrl?: string;
   infoHash?: string;
   magnetUrl?: string;
   sizeBytes?: number;
@@ -60,7 +61,7 @@ export async function upsertMediaItem(
       .limit(1);
 
     if (existing) {
-      return maybeUpdateOriginSection(existing, input.originSection);
+      return maybeUpdateContext(existing, input);
     }
   }
 
@@ -72,7 +73,7 @@ export async function upsertMediaItem(
       .limit(1);
 
     if (existing) {
-      return maybeUpdateOriginSection(existing, input.originSection);
+      return maybeUpdateContext(existing, input);
     }
   }
 
@@ -91,23 +92,37 @@ export async function upsertMediaItem(
       infoHash,
       sourceUrl: input.sourceUrl ?? null,
       originSection: input.originSection ?? "other",
+      previewImageUrl: input.previewImageUrl ?? null,
     })
     .returning();
 
   return created;
 }
 
-async function maybeUpdateOriginSection(
+async function maybeUpdateContext(
   row: MediaItemRow,
-  originSection: MediaOriginSection | undefined,
+  input: MediaItemInput,
 ): Promise<MediaItemRow> {
-  if (!originSection || row.originSection !== "other") {
+  const patch: Partial<typeof mediaItems.$inferInsert> = {};
+
+  if (input.originSection && row.originSection === "other") {
+    patch.originSection = input.originSection;
+  }
+  if (input.previewImageUrl && row.previewImageUrl !== input.previewImageUrl) {
+    patch.previewImageUrl = input.previewImageUrl;
+  }
+  if (input.previewImageUrl && input.title && row.title !== input.title) {
+    patch.title = input.title;
+    patch.normalizedTitle = input.title.trim().toLowerCase();
+  }
+
+  if (Object.keys(patch).length === 0) {
     return row;
   }
 
   const [updated] = await db
     .update(mediaItems)
-    .set({ originSection, updatedAt: new Date() })
+    .set({ ...patch, updatedAt: new Date() })
     .where(eq(mediaItems.id, row.id))
     .returning();
 

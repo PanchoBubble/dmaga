@@ -37,7 +37,8 @@ export const useSavedStore = create<SavedState>((set, get) => ({
     }));
 
     const body: SetSavedRequest = {
-      title: result.title,
+      title: result.displayTitle ?? result.title,
+      previewImageUrl: result.previewImageUrl,
       infoHash: result.infoHash,
       magnetUrl: result.magnetUrl,
       sizeBytes: result.sizeBytes,
@@ -57,9 +58,7 @@ export const useSavedStore = create<SavedState>((set, get) => ({
         body: JSON.stringify(body),
       });
 
-      const payload = (await response.json()) as
-        | SetSavedResponse
-        | { error?: string };
+      const payload = (await response.json()) as SetSavedResponse | { error?: string };
 
       if (!response.ok || !("saved" in payload)) {
         throw new Error(

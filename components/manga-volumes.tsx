@@ -5,9 +5,11 @@ import { useMemo, useState } from "react";
 import { TitleSources } from "@/components/title-sources";
 
 export function MangaVolumes({
+  poster,
   title,
   totalVolumes,
 }: {
+  poster?: string;
   title: string;
   totalVolumes: number;
 }) {
@@ -22,6 +24,8 @@ export function MangaVolumes({
       <TitleSources
         args={{
           query: `${title} manga`,
+          displayTitle: title,
+          previewImageUrl: poster,
           type: "manga",
           categories: ["7030"],
         }}
@@ -57,6 +61,8 @@ export function MangaVolumes({
       <TitleSources
         args={{
           query: `${title} manga volume ${volume}`,
+          displayTitle: title,
+          previewImageUrl: poster,
           type: "manga",
           categories: ["7030"],
         }}
