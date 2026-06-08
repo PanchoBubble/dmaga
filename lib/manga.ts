@@ -1,60 +1,26 @@
 export type MangaCatalogItem = {
+  id: number;
   slug: string;
   title: string;
   subtitle: string;
   query: string;
   poster?: string;
+  synopsis?: string;
+  score?: number;
+  chapters?: number;
+  volumes?: number;
+  url?: string;
 };
 
 export type MangaFileKind = "archive" | "pdf" | "image" | "unsupported";
 
-export const mangaCatalogItems: MangaCatalogItem[] = [
-  {
-    slug: "one-piece",
-    title: "One Piece",
-    subtitle: "Long-running pirate adventure",
-    query: "One Piece manga",
-    poster: "https://cdn.myanimelist.net/images/manga/2/253146l.jpg",
-  },
-  {
-    slug: "chainsaw-man",
-    title: "Chainsaw Man",
-    subtitle: "Devils, hunters, sharp turns",
-    query: "Chainsaw Man manga",
-    poster: "https://cdn.myanimelist.net/images/manga/3/216464l.jpg",
-  },
-  {
-    slug: "spy-x-family",
-    title: "Spy x Family",
-    subtitle: "Found family espionage comedy",
-    query: "Spy x Family manga",
-    poster: "https://cdn.myanimelist.net/images/manga/3/219741l.jpg",
-  },
-  {
-    slug: "berserk",
-    title: "Berserk",
-    subtitle: "Dark fantasy classic",
-    query: "Berserk manga",
-    poster: "https://cdn.myanimelist.net/images/manga/1/157897l.jpg",
-  },
-  {
-    slug: "vagabond",
-    title: "Vagabond",
-    subtitle: "Samurai epic",
-    query: "Vagabond manga",
-    poster: "https://cdn.myanimelist.net/images/manga/1/259070l.jpg",
-  },
-  {
-    slug: "dandadan",
-    title: "Dandadan",
-    subtitle: "Occult action chaos",
-    query: "Dandadan manga",
-    poster: "https://cdn.myanimelist.net/images/manga/2/248746l.jpg",
-  },
-];
-
-export function getMangaCatalogItem(slug: string): MangaCatalogItem | null {
-  return mangaCatalogItems.find((item) => item.slug === slug) ?? null;
+export function parseMangaCatalogSlug(slug: string): number | null {
+  const id = slug.match(/^mal-(\d+)(?:-|$)/)?.[1];
+  if (!id) {
+    return null;
+  }
+  const parsed = Number(id);
+  return Number.isInteger(parsed) ? parsed : null;
 }
 
 export function classifyMangaFile(fileName: string): {

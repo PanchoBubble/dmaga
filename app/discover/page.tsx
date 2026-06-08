@@ -1,8 +1,8 @@
 import { DiscoverRows } from "@/components/discover-rows";
 import { DiscoverSearch } from "@/components/discover-search";
 import type { DiscoverRow, DiscoverRowId } from "@/lib/discover";
-import { mangaCatalogItems } from "@/lib/manga";
 import { fetchCatalog } from "@/lib/server/metadata/cinemeta";
+import { fetchPopularMangaCatalog } from "@/lib/server/metadata/jikan-manga";
 import { listMyAnimeListAnime } from "@/lib/server/myanimelist/auth-service";
 import {
   getDiscoverRowOrder,
@@ -22,42 +22,50 @@ export const dynamic = "force-dynamic";
  * horizontally-scrolling rows that link into the full per-type grids.
  */
 export default async function DiscoverPage() {
-  const [popularMovies, popularShows, newMovies, newShows, discoverOrder, malRows] =
-    await Promise.all([
-      fetchCatalog({ type: "movie", sort: "top" }),
-      fetchCatalog({ type: "series", sort: "top" }),
-      fetchCatalog({ type: "movie", sort: "year" }),
-      fetchCatalog({ type: "series", sort: "year" }),
-      getDiscoverRowOrder(),
-      Promise.all(
-        visibleMyAnimeListStatuses.map(async (status) => {
-          try {
-            const items = await listMyAnimeListAnime(status.id, 12);
-            return {
-              id: `mal:${status.id}` as DiscoverRowId,
-              kind: "mal" as const,
-              title: status.label,
-              items,
-            };
-          } catch {
-            return {
-              id: `mal:${status.id}` as DiscoverRowId,
-              kind: "mal" as const,
-              title: status.label,
-              items: [],
-            };
-          }
-        }),
-      ),
-    ]);
+  const [
+    popularMovies,
+    popularShows,
+    newMovies,
+    newShows,
+    popularManga,
+    discoverOrder,
+    malRows,
+  ] = await Promise.all([
+    fetchCatalog({ type: "movie", sort: "top" }),
+    fetchCatalog({ type: "series", sort: "top" }),
+    fetchCatalog({ type: "movie", sort: "year" }),
+    fetchCatalog({ type: "series", sort: "year" }),
+    fetchPopularMangaCatalog(12),
+    getDiscoverRowOrder(),
+    Promise.all(
+      visibleMyAnimeListStatuses.map(async (status) => {
+        try {
+          const items = await listMyAnimeListAnime(status.id, 12);
+          return {
+            id: `mal:${status.id}` as DiscoverRowId,
+            kind: "mal" as const,
+            title: status.label,
+            items,
+          };
+        } catch {
+          return {
+            id: `mal:${status.id}` as DiscoverRowId,
+            kind: "mal" as const,
+            title: status.label,
+            items: [],
+          };
+        }
+      }),
+    ),
+  ]);
   const rows = sortRows(
     [
       {
         id: "manga:starter",
         kind: "manga",
-        title: "Manga",
+        title: "Popular Manga",
         href: "/manga",
-        items: mangaCatalogItems,
+        items: popularManga,
       },
       ...malRows,
       {

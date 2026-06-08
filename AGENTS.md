@@ -2,6 +2,8 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
+Do not run the application service or dev server without asking the user first.
+
 ## Quick Reference
 
 ```bash

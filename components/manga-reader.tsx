@@ -30,6 +30,7 @@ export function MangaReader({
 }: MangaReaderProps) {
   const [pages, setPages] = useState<ArchivePage[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
+  const [folder, setFolder] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">(
     kind === "archive" ? "loading" : "idle",
   );
@@ -57,6 +58,7 @@ export function MangaReader({
         if (!cancelled) {
           setPages(payload.pages ?? []);
           setPageIndex(0);
+          setFolder(defaultFolder(payload.pages ?? []));
           setStatus("success");
         }
       } catch (caught) {
@@ -72,7 +74,12 @@ export function MangaReader({
     };
   }, [kind, linkId]);
 
-  const currentPage = pages[pageIndex];
+  const folders = useMemo(() => archiveFolders(pages), [pages]);
+  const visiblePages = useMemo(
+    () => pages.filter((page) => folderForPage(page.name) === folder),
+    [folder, pages],
+  );
+  const currentPage = visiblePages[pageIndex];
   const currentPageUrl = useMemo(() => {
     if (!currentPage) {
       return null;
@@ -110,7 +117,13 @@ export function MangaReader({
           currentPageUrl={currentPageUrl}
           error={error}
           pageIndex={pageIndex}
-          pages={pages}
+          pages={visiblePages}
+          folders={folders}
+          folder={folder}
+          setFolder={(nextFolder) => {
+            setFolder(nextFolder);
+            setPageIndex(0);
+          }}
           setPageIndex={setPageIndex}
           status={status}
         />
@@ -146,6 +159,9 @@ function ArchiveReader({
   error,
   pageIndex,
   pages,
+  folders,
+  folder,
+  setFolder,
   setPageIndex,
   status,
 }: {
@@ -154,6 +170,9 @@ function ArchiveReader({
   error: string | null;
   pageIndex: number;
   pages: ArchivePage[];
+  folders: string[];
+  folder: string;
+  setFolder: (folder: string) => void;
   setPageIndex: (index: number) => void;
   status: "idle" | "loading" | "success" | "error";
 }) {
@@ -202,6 +221,34 @@ function ArchiveReader({
         <p className="min-w-0 text-center text-sm font-black">
           {pageIndex + 1} / {pages.length}
         </p>
+        <div className="hidden min-w-0 flex-1 items-center justify-center gap-2 md:flex">
+          {folders.length > 1 ? (
+            <select
+              aria-label="Folder"
+              className="h-9 max-w-60 min-w-0 border-2 border-foreground bg-background px-2 text-xs font-bold outline-none focus:ring-2 focus:ring-ring"
+              onChange={(event) => setFolder(event.target.value)}
+              value={folder}
+            >
+              {folders.map((candidate) => (
+                <option key={candidate} value={candidate}>
+                  {candidate || "Archive root"}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          <select
+            aria-label="Page"
+            className="h-9 max-w-72 min-w-0 border-2 border-foreground bg-background px-2 text-xs font-bold outline-none focus:ring-2 focus:ring-ring"
+            onChange={(event) => setPageIndex(Number(event.target.value))}
+            value={pageIndex}
+          >
+            {pages.map((page, index) => (
+              <option key={page.name} value={index}>
+                {fileNameForPage(page.name)}
+              </option>
+            ))}
+          </select>
+        </div>
         <Button
           className="size-9"
           disabled={!canGoForward}
@@ -214,6 +261,35 @@ function ArchiveReader({
         </Button>
       </div>
 
+      <div className="grid gap-2 border-2 border-foreground bg-card p-2 shadow-line md:hidden">
+        {folders.length > 1 ? (
+          <select
+            aria-label="Folder"
+            className="h-10 w-full border-2 border-foreground bg-background px-2 text-sm font-bold outline-none focus:ring-2 focus:ring-ring"
+            onChange={(event) => setFolder(event.target.value)}
+            value={folder}
+          >
+            {folders.map((candidate) => (
+              <option key={candidate} value={candidate}>
+                {candidate || "Archive root"}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        <select
+          aria-label="Page"
+          className="h-10 w-full border-2 border-foreground bg-background px-2 text-sm font-bold outline-none focus:ring-2 focus:ring-ring"
+          onChange={(event) => setPageIndex(Number(event.target.value))}
+          value={pageIndex}
+        >
+          {pages.map((page, index) => (
+            <option key={page.name} value={index}>
+              {fileNameForPage(page.name)}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="border-2 border-foreground bg-card p-2 shadow-line">
         <img
           alt={currentPage.name}
@@ -223,4 +299,24 @@ function ArchiveReader({
       </div>
     </div>
   );
+}
+
+function archiveFolders(pages: ArchivePage[]): string[] {
+  return [...new Set(pages.map((page) => folderForPage(page.name)))].sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+  );
+}
+
+function defaultFolder(pages: ArchivePage[]): string {
+  return archiveFolders(pages)[0] ?? "";
+}
+
+function folderForPage(name: string): string {
+  const index = name.lastIndexOf("/");
+  return index === -1 ? "" : name.slice(0, index);
+}
+
+function fileNameForPage(name: string): string {
+  const index = name.lastIndexOf("/");
+  return index === -1 ? name : name.slice(index + 1);
 }

@@ -1,20 +1,20 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Star } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { TitleSources } from "@/components/title-sources";
-import { getMangaCatalogItem, mangaCatalogItems } from "@/lib/manga";
+import { parseMangaCatalogSlug } from "@/lib/manga";
+import { fetchMangaCatalogItem } from "@/lib/server/metadata/jikan-manga";
 
 type MangaTitlePageProps = { params: Promise<{ slug: string }> };
 
-export function generateStaticParams() {
-  return mangaCatalogItems.map((item) => ({ slug: item.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: MangaTitlePageProps) {
   const { slug } = await params;
-  const item = getMangaCatalogItem(slug);
+  const id = parseMangaCatalogSlug(slug);
+  const item = id ? await fetchMangaCatalogItem(id) : null;
   return {
     title: item ? `${item.title} · Manga · dmaga` : "Manga · dmaga",
   };
@@ -22,7 +22,8 @@ export async function generateMetadata({ params }: MangaTitlePageProps) {
 
 export default async function MangaTitlePage({ params }: MangaTitlePageProps) {
   const { slug } = await params;
-  const item = getMangaCatalogItem(slug);
+  const id = parseMangaCatalogSlug(slug);
+  const item = id ? await fetchMangaCatalogItem(id) : null;
 
   if (!item) {
     notFound();
@@ -62,9 +63,29 @@ export default async function MangaTitlePage({ params }: MangaTitlePageProps) {
           <p className="mt-2 text-sm font-semibold text-muted-foreground">
             {item.subtitle}
           </p>
-          <p className="mt-3 text-sm font-bold">
-            Supported inline: CBZ/ZIP image archives, PDF, and loose image files.
-          </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-black">
+            {item.score ? (
+              <span className="inline-flex items-center gap-1 border-2 border-foreground bg-background px-2 py-1">
+                <Star className="size-3 fill-yellow-400 text-yellow-400" />
+                {item.score.toFixed(1)}
+              </span>
+            ) : null}
+            {item.chapters ? (
+              <span className="border-2 border-foreground bg-background px-2 py-1">
+                {item.chapters} chapters
+              </span>
+            ) : null}
+            {item.volumes ? (
+              <span className="border-2 border-foreground bg-background px-2 py-1">
+                {item.volumes} volumes
+              </span>
+            ) : null}
+          </div>
+          {item.synopsis ? (
+            <p className="mt-3 line-clamp-4 text-sm font-semibold leading-6">
+              {item.synopsis}
+            </p>
+          ) : null}
         </div>
       </section>
 
