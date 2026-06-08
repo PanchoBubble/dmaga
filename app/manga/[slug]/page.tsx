@@ -90,11 +90,12 @@ export default async function MangaTitlePage({ params }: MangaTitlePageProps) {
         </div>
       </section>
 
-      {item.volumes ? (
+      {item.volumes || item.chapters ? (
         <MangaVolumes
           poster={item.poster}
           title={item.title}
-          totalVolumes={item.volumes}
+          totalVolumes={item.volumes ?? 0}
+          totalChapters={item.chapters}
         />
       ) : (
         <TitleSources

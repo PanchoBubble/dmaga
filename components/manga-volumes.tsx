@@ -4,22 +4,33 @@ import { useMemo, useState } from "react";
 
 import { TitleSources } from "@/components/title-sources";
 
+type MangaUnit = "volume" | "chapter";
+
 export function MangaVolumes({
   poster,
   title,
   totalVolumes,
+  totalChapters,
 }: {
   poster?: string;
   title: string;
   totalVolumes: number;
+  totalChapters?: number;
 }) {
-  const volumes = useMemo(
-    () => Array.from({ length: totalVolumes }, (_, index) => index + 1),
-    [totalVolumes],
-  );
-  const [volume, setVolume] = useState(volumes[0] ?? 1);
+  const hasVolumes = totalVolumes > 0;
+  const hasChapters = (totalChapters ?? 0) > 0;
 
-  if (!volumes.length) {
+  const [unit, setUnit] = useState<MangaUnit>(hasVolumes ? "volume" : "chapter");
+  const [volume, setVolume] = useState(1);
+  const [chapter, setChapter] = useState(1);
+
+  const count = unit === "volume" ? totalVolumes : totalChapters ?? 0;
+  const numbers = useMemo(
+    () => Array.from({ length: count }, (_, index) => index + 1),
+    [count],
+  );
+
+  if (!hasVolumes && !hasChapters) {
     return (
       <TitleSources
         args={{
@@ -35,24 +46,47 @@ export function MangaVolumes({
     );
   }
 
+  const selected = unit === "volume" ? volume : chapter;
+  const setSelected = unit === "volume" ? setVolume : setChapter;
+  const unitLabel = unit === "volume" ? "Volume" : "Chapter";
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {hasVolumes && hasChapters ? (
+          <div className="flex border-2 border-foreground">
+            {(["volume", "chapter"] as const).map((value) => (
+              <button
+                className={`h-9 px-3 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-ring ${
+                  unit === value
+                    ? "bg-foreground text-background"
+                    : "bg-background text-foreground"
+                }`}
+                key={value}
+                onClick={() => setUnit(value)}
+                type="button"
+              >
+                {value === "volume" ? "Volumes" : "Chapters"}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <label
           className="text-xs font-black uppercase text-muted-foreground"
-          htmlFor="manga-volume"
+          htmlFor="manga-unit-number"
         >
-          Volume
+          {unitLabel}
         </label>
         <select
           className="h-9 border-2 border-foreground bg-background px-2 text-sm font-bold outline-none focus:ring-2 focus:ring-ring"
-          id="manga-volume"
-          onChange={(event) => setVolume(Number(event.target.value))}
-          value={volume}
+          id="manga-unit-number"
+          onChange={(event) => setSelected(Number(event.target.value))}
+          value={selected}
         >
-          {volumes.map((number) => (
+          {numbers.map((number) => (
             <option key={number} value={number}>
-              Volume {number}
+              {unitLabel} {number}
             </option>
           ))}
         </select>
@@ -60,14 +94,15 @@ export function MangaVolumes({
 
       <TitleSources
         args={{
-          query: `${title} manga volume ${volume}`,
+          query: `${title} manga ${unit} ${selected}`,
           displayTitle: title,
           previewImageUrl: poster,
           type: "manga",
           categories: ["7030"],
         }}
+        key={`${unit}-${selected}`}
         mode="manga"
-        title={`Volume ${volume} Sources`}
+        title={`${unitLabel} ${selected} Sources`}
       />
     </div>
   );

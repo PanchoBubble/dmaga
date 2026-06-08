@@ -42,6 +42,9 @@ export function AnimeEpisodes({
       <ul className="space-y-2">
         {episodes.map((episode) => {
           const isSelected = selected?.id === episode.id;
+          const episodeLabel = `E${String(episode.episode).padStart(2, "0")}${
+            episode.name ? ` · ${episode.name}` : ""
+          }`;
           return (
             <li key={episode.id}>
               <button
@@ -70,7 +73,7 @@ export function AnimeEpisodes({
                         season: episode.season,
                         episode: episode.episode,
                       }),
-                      displayTitle: title,
+                      displayTitle: episodeLabel,
                       previewImageUrl: poster,
                       type: "series",
                       season: episode.season,
