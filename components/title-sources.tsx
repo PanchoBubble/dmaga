@@ -20,9 +20,11 @@ import { cn } from "@/lib/utils";
 export function TitleSources({
   args,
   mode = "download",
+  title = "Sources",
 }: {
   args: TitleSourcesArgs;
   mode?: "download" | "manga";
+  title?: string;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("seeds");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -53,7 +55,7 @@ export function TitleSources({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-black">
-          Sources
+          {title}
           {results.length ? (
             <span className="ml-2 text-sm font-bold text-muted-foreground">
               {results.length}

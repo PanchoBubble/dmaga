@@ -75,6 +75,7 @@ export default async function MangaTitlePage({ params }: MangaTitlePageProps) {
           categories: ["7030"],
         }}
         mode="manga"
+        title="Manga Sources"
       />
     </div>
   );

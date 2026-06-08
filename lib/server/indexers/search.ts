@@ -40,7 +40,7 @@ export async function searchAllIndexers(
   params: TorrentSearchParams,
   indexerIds?: string[],
 ): Promise<IndexerSearchOutcome> {
-  const configs = await resolveEnabledConfigs(indexerIds);
+  const configs = await resolveEnabledConfigs(params, indexerIds);
 
   const settled = await Promise.allSettled(
     configs.map((config) => searchOne(config, params)),
@@ -78,7 +78,7 @@ export async function* streamIndexerSearch(
   signal?: AbortSignal,
   indexerIds?: string[],
 ): AsyncGenerator<SearchStreamEvent> {
-  const configs = await resolveEnabledConfigs(indexerIds);
+  const configs = await resolveEnabledConfigs(params, indexerIds);
   yield { type: "start", indexersTotal: configs.length };
 
   // Tag each search with its index so we can drop it from the pending set the
@@ -132,14 +132,16 @@ export async function* streamIndexerSearch(
  * match an enabled indexer are simply ignored.
  */
 async function resolveEnabledConfigs(
+  params: TorrentSearchParams,
   indexerIds?: string[],
 ): Promise<IndexerConfig[]> {
-  const configs = await loadEnabledIndexerConfigs();
+  let configs = await loadEnabledIndexerConfigs();
   if (!indexerIds || indexerIds.length === 0) {
-    return configs;
+    return filterConfigsForParams(configs, params);
   }
   const wanted = new Set(indexerIds);
-  return configs.filter((config) => wanted.has(config.id));
+  configs = configs.filter((config) => wanted.has(config.id));
+  return filterConfigsForParams(configs, params);
 }
 
 async function searchOne(
@@ -147,7 +149,92 @@ async function searchOne(
   params: TorrentSearchParams,
 ): Promise<TorrentSearchResult[]> {
   const adapter = getIndexerAdapter(config.type);
-  return adapter.search(config, params);
+  return adapter.search(config, paramsForConfig(config, params));
+}
+
+function filterConfigsForParams(
+  configs: IndexerConfig[],
+  params: TorrentSearchParams,
+): IndexerConfig[] {
+  if (!isMangaSearch(params)) {
+    return configs;
+  }
+
+  return configs.filter((config) => mangaCategoriesForConfig(config) !== null);
+}
+
+function paramsForConfig(
+  config: IndexerConfig,
+  params: TorrentSearchParams,
+): TorrentSearchParams {
+  if (!isMangaSearch(params)) {
+    return params;
+  }
+
+  const categories = mangaCategoriesForConfig(config);
+  return {
+    ...params,
+    categories: categories ?? [],
+    imdbId: undefined,
+    season: undefined,
+    episode: undefined,
+  };
+}
+
+function isMangaSearch(params: TorrentSearchParams): boolean {
+  return Boolean(
+    params.categories?.some((category) => category === "7030" || category === "7000"),
+  );
+}
+
+function mangaCategoriesForConfig(config: IndexerConfig): string[] | null {
+  if (config.type === "torrentio") {
+    return null;
+  }
+
+  if (config.type === "torznab") {
+    const configured = config.categories ?? [];
+    if (configured.length === 0 || configured.some(isMangaCategory)) {
+      return ["7030"];
+    }
+    return null;
+  }
+
+  const presetKey = presetKeyOf(config);
+  if (presetKey === "anime-nyaa-si" || presetKey === "prowlarr-public-nyaasi") {
+    return ["3_0"];
+  }
+  if (
+    presetKey === "anime-tokyo-toshokan" ||
+    presetKey === "prowlarr-public-tokyotosho"
+  ) {
+    return ["3"];
+  }
+  if (presetKey === "prowlarr-public-ehentai") {
+    return ["1"];
+  }
+
+  const configured = config.categories ?? [];
+  const textualMangaCategory = configured.find((category) =>
+    category.toLowerCase().includes("manga"),
+  );
+  if (textualMangaCategory) {
+    return [textualMangaCategory];
+  }
+
+  return configured.some(isMangaCategory) ? ["7030"] : null;
+}
+
+function isMangaCategory(category: string): boolean {
+  return category === "7030" || category === "7000";
+}
+
+function presetKeyOf(config: IndexerConfig): string | undefined {
+  const settings = config.settings;
+  if (!settings) {
+    return undefined;
+  }
+  return typeof settings.presetKey === "string" ? settings.presetKey : undefined;
 }
 
 /** Maps normalized results to client DTOs, stamping local Real-Debrid state. */

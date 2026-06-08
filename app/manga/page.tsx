@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { MangaSearch } from "@/components/manga-search";
 import { mangaCatalogItems } from "@/lib/manga";
 
 export const metadata = {
@@ -13,9 +14,18 @@ export default function MangaPage() {
       <header className="border-2 border-foreground bg-card p-4 shadow-line">
         <h1 className="text-2xl font-black">Manga</h1>
         <p className="mt-1 text-sm font-semibold text-muted-foreground">
-          Pick a title, choose a source, then read supported files in the browser.
+          Search manga sources directly, or pick a starter title below.
         </p>
       </header>
+
+      <MangaSearch />
+
+      <div>
+        <h2 className="text-xl font-black">Starter Titles</h2>
+        <p className="mt-1 text-sm font-semibold text-muted-foreground">
+          These use manga-only source lookup; they are shortcuts, not the whole catalog.
+        </p>
+      </div>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {mangaCatalogItems.map((item) => (
