@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # Refresh the app image, rebuild the stack, and restart it.
 

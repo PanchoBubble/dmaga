@@ -15,15 +15,15 @@
 # that. Avoiding `--build` here is what stops a new dangling image piling up on
 # every start.
 up:
-	podman compose up -d
+	docker compose up -d
 
 # Start in the foreground with combined logs (Ctrl-C to stop), no rebuild.
 dev:
-	podman compose up
+	docker compose up
 
 # Build (or rebuild) the app image explicitly.
 build:
-	podman compose build
+	docker compose build
 
 # Reliable teardown: never hangs, keeps postgres-data / redis-data / downloads.
 # --depend removes each container together with anything that shares its netns
@@ -31,9 +31,9 @@ build:
 # so they must go before it); --ignore swallows the already-removed ones that
 # cascade leaves behind.
 down:
-	@ids=$$(podman ps -aq --filter name='dmaga-'); \
-	if [ -n "$$ids" ]; then podman rm -f --depend --ignore -t 10 $$ids; else echo "No dmaga containers to remove."; fi
-	-@podman network rm dmaga_default 2>/dev/null
+	@ids=$$(docker ps -aq --filter name='dmaga-'); \
+	if [ -n "$$ids" ]; then docker rm -f --depend --ignore -t 10 $$ids; else echo "No dmaga containers to remove."; fi
+	-@docker network rm dmaga_default 2>/dev/null
 
 # Restart without rebuilding (code changes hot-reload via the bind mount).
 restart: down up
@@ -47,27 +47,27 @@ update:
 # Dockerfile changed), then rebuild and start. Removing the named volumes here
 # is also what keeps them from going stale — a plain `make restart` reuses them.
 rebuild: down
-	-podman volume rm dmaga_app-node-modules dmaga_app-next dmaga_poller-node-modules 2>/dev/null
-	podman compose up -d --build
+	-docker volume rm dmaga_app-node-modules dmaga_app-next dmaga_poller-node-modules 2>/dev/null
+	docker compose up -d --build
 
 # Follow logs for one service, e.g. `make logs S=debrid-poller` (defaults to app).
 logs:
-	podman compose logs -f $(or $(S),app)
+	docker compose logs -f $(or $(S),app)
 
 ps:
-	podman compose ps
+	docker compose ps
 
 # Reclaim space: drop dangling (<none>) images, orphaned anonymous volumes
 # (64-hex names, e.g. old node_modules copies from anonymous-volume recreates),
 # and any leftover build working-containers a failed build left behind. Safe —
 # touches no tagged images, no NAMED volumes (dmaga_*), no running containers.
 clean:
-	-podman image prune -f
-	@anon=$$(podman volume ls -q 2>/dev/null | grep -E '^[0-9a-f]{64}$$'); \
-	if [ -n "$$anon" ]; then echo "$$anon" | xargs -r podman volume rm; echo "removed orphaned anonymous volumes"; else echo "no orphaned anonymous volumes"; fi
-	@ext=$$(podman ps -a --external --format '{{.ID}} {{.Names}}' 2>/dev/null | grep working-container | awk '{print $$1}'); \
-	if [ -n "$$ext" ]; then echo "$$ext" | xargs -r podman rm -f; echo "removed build leftovers"; else echo "no build leftovers"; fi
+	-docker image prune -f
+	@anon=$$(docker volume ls -q 2>/dev/null | grep -E '^[0-9a-f]{64}$$'); \
+	if [ -n "$$anon" ]; then echo "$$anon" | xargs -r docker volume rm; echo "removed orphaned anonymous volumes"; else echo "no orphaned anonymous volumes"; fi
+	@ext=$$(docker ps -a --external --format '{{.ID}} {{.Names}}' 2>/dev/null | grep working-container | awk '{print $$1}'); \
+	if [ -n "$$ext" ]; then echo "$$ext" | xargs -r docker rm -f; echo "removed build leftovers"; else echo "no build leftovers"; fi
 
 # DESTRUCTIVE: tear down and delete the data volumes too.
 nuke: down
-	-podman volume rm dmaga_postgres-data dmaga_redis-data dmaga_downloads
+	-docker volume rm dmaga_postgres-data dmaga_redis-data dmaga_downloads
