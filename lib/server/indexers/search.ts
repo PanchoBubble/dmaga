@@ -273,6 +273,7 @@ async function toDtosWithAvailability(
     magnetUrl: result.magnetUrl,
     infoHash: result.infoHash,
     sourceUrl: result.sourceUrl,
+    directSource: result.directSource,
     originSection,
     debridState:
       (result.infoHash && availability.get(result.infoHash)) ||

@@ -26,6 +26,8 @@ type DebridState = {
   addToDebrid: (result: SearchResultDto) => Promise<AddToDebridResponse | null>;
   /** Sends a result to the local qBittorrent (non-debrid) download path. */
   addToTorrent: (result: SearchResultDto) => Promise<AddToDebridResponse | null>;
+  /** Adds a direct-HTTP source (e.g. Internet Archive) — no torrent, no debrid. */
+  addDirect: (result: SearchResultDto) => Promise<AddToDebridResponse | null>;
 };
 
 const POLL_INTERVAL_MS = 2_000;
@@ -50,6 +52,8 @@ export const useDebridStore = create<DebridState>((set, get) => ({
     performAdd(result, "/api/debrid/add", "Failed to add to Real-Debrid.", set, get),
   addToTorrent: (result) =>
     performAdd(result, "/api/torrents/add", "Failed to add to qBittorrent.", set, get),
+  addDirect: (result) =>
+    performAdd(result, "/api/direct/add", "Failed to add direct source.", set, get),
 }));
 
 /**
@@ -90,6 +94,7 @@ async function performAdd(
     indexerId: result.indexerId,
     indexerName: result.indexerName,
     sourceUrl: result.sourceUrl,
+    directSource: result.directSource,
     originSection: result.originSection,
   };
 

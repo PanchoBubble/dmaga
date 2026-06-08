@@ -7,6 +7,8 @@
  * Cardigann-style public preset adapter.
  */
 
+import type { DirectSource } from "@/lib/search";
+
 export type IndexerFetchMode = "direct" | "flaresolverr";
 
 /**
@@ -71,6 +73,8 @@ export type TorrentSearchResult = {
   magnetUrl?: string;
   infoHash?: string;
   sourceUrl?: string;
+  /** Present when the result can be fetched directly over HTTP (no torrent). */
+  directSource?: DirectSource;
 };
 
 /** Outcome of an adapter connectivity/auth probe. */
