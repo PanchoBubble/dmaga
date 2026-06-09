@@ -22,7 +22,16 @@ type ArchiveDoc = {
   date?: string;
   publicdate?: string;
   downloads?: number;
+  mediatype?: string;
 };
+
+/**
+ * Archive.org `mediatype`s worth surfacing as downloadable content. Everything
+ * else (`web` crawls, raw `data`, `collection`/`account` index pages, loose
+ * `software`) is noise that otherwise dominates results — a bare search sorted
+ * by downloads is mostly giant web-crawl dumps.
+ */
+const CONTENT_MEDIATYPES = new Set(["texts", "movies", "audio", "image"]);
 
 export class InternetArchiveIndexerAdapter implements IndexerAdapter {
   readonly type: IndexerType = "internet_archive";
@@ -61,6 +70,7 @@ function searchUrl(config: IndexerConfig, params: TorrentSearchParams): URL {
   url.searchParams.append("fl[]", "date");
   url.searchParams.append("fl[]", "publicdate");
   url.searchParams.append("fl[]", "downloads");
+  url.searchParams.append("fl[]", "mediatype");
   return url;
 }
 
@@ -69,6 +79,11 @@ function normalizeDoc(
   doc: ArchiveDoc,
 ): TorrentSearchResult | null {
   if (!doc.identifier) {
+    return null;
+  }
+
+  // Skip web crawls, raw data dumps and index pages — only real media/text.
+  if (doc.mediatype && !CONTENT_MEDIATYPES.has(doc.mediatype)) {
     return null;
   }
 
