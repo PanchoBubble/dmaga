@@ -66,7 +66,7 @@ export async function findMangaDexId(
   const ordered = [...list.filter(matchesMal), ...list.filter((m) => !matchesMal(m))];
 
   for (const manga of ordered.slice(0, 6)) {
-    if (await hasEnglishChapters(manga.id)) {
+    if (await hasReadableChapters(manga.id)) {
       return manga.id;
     }
   }
@@ -74,14 +74,23 @@ export async function findMangaDexId(
   return ordered[0].id;
 }
 
-/** True when the series has at least one English chapter (cheap feed probe). */
-async function hasEnglishChapters(seriesId: string): Promise<boolean> {
+/**
+ * True when the series has at least one *readable* English chapter — i.e. with
+ * hosted pages, not an external redirect. Licensed titles (Solo Leveling, One
+ * Piece) keep chapter entries that only link off to the official reader
+ * (`pages: 0`, `externalUrl` set), which we can't serve, so a plain count would
+ * wrongly mark them readable.
+ */
+async function hasReadableChapters(seriesId: string): Promise<boolean> {
   try {
     const url = new URL(`${BASE}/manga/${seriesId}/feed`);
     url.searchParams.append("translatedLanguage[]", "en");
-    url.searchParams.set("limit", "1");
-    const payload = (await mdFetch(url)) as { total?: number };
-    return (payload.total ?? 0) > 0;
+    url.searchParams.set("limit", "100");
+    const payload = (await mdFetch(url)) as { data?: MdChapter[] };
+    return (payload.data ?? []).some(
+      (chapter) =>
+        Boolean(chapter.attributes?.pages) && !chapter.attributes?.externalUrl,
+    );
   } catch {
     return false;
   }
