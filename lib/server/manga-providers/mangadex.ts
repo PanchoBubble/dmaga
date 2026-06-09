@@ -36,8 +36,10 @@ async function mdFetch(url: URL): Promise<unknown> {
 }
 
 /**
- * Resolves a MangaDex series id from the MAL id (preferred — exact match via
- * the manga's `links.mal`) or the title (best search hit otherwise).
+ * Resolves a MangaDex series id. MangaDex's title search often ranks a
+ * spin-off/sequel (with no English chapters) above the real series, so we
+ * order candidates (exact MAL-id match first, then search relevance) and pick
+ * the first that actually has English chapters — falling back to the top hit.
  */
 export async function findMangaDexId(
   malId: number | string | undefined,
@@ -51,18 +53,38 @@ export async function findMangaDexId(
   }
 
   const payload = (await mdFetch(url)) as { data?: MdManga[] };
-  const list = payload.data ?? [];
+  const list = (payload.data ?? []).filter((manga): manga is MdManga & { id: string } =>
+    Boolean(manga.id),
+  );
+  if (list.length === 0) {
+    return null;
+  }
 
-  if (malId !== undefined) {
-    const exact = list.find(
-      (manga) => String(manga.attributes?.links?.mal ?? "") === String(malId),
-    );
-    if (exact?.id) {
-      return exact.id;
+  const matchesMal = (manga: MdManga) =>
+    malId !== undefined &&
+    String(manga.attributes?.links?.mal ?? "") === String(malId);
+  const ordered = [...list.filter(matchesMal), ...list.filter((m) => !matchesMal(m))];
+
+  for (const manga of ordered.slice(0, 6)) {
+    if (await hasEnglishChapters(manga.id)) {
+      return manga.id;
     }
   }
 
-  return list[0]?.id ?? null;
+  return ordered[0].id;
+}
+
+/** True when the series has at least one English chapter (cheap feed probe). */
+async function hasEnglishChapters(seriesId: string): Promise<boolean> {
+  try {
+    const url = new URL(`${BASE}/manga/${seriesId}/feed`);
+    url.searchParams.append("translatedLanguage[]", "en");
+    url.searchParams.set("limit", "1");
+    const payload = (await mdFetch(url)) as { total?: number };
+    return (payload.total ?? 0) > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
