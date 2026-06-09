@@ -1,6 +1,11 @@
 import "server-only";
 
 import {
+  findComickId,
+  getComickPages,
+  listComickChapters,
+} from "@/lib/server/manga-providers/comick";
+import {
   findMangaDexId,
   getMangaDexPages,
   listMangaDexChapters,
@@ -23,7 +28,11 @@ export async function getMergedChapters(
   malId: number | string | undefined,
   title: string,
 ): Promise<{ chapters: ProviderChapter[]; sources: MangaProviderKey[] }> {
-  const settled = await Promise.allSettled([listFromMangaDex(malId, title)]);
+  // MangaDex first so it wins ties; Comick fills chapter numbers it's missing.
+  const settled = await Promise.allSettled([
+    listFromMangaDex(malId, title),
+    listFromComick(title),
+  ]);
 
   const sources: MangaProviderKey[] = [];
   const byNumber = new Map<string, ProviderChapter>();
@@ -57,6 +66,9 @@ export async function getChapterPages(
   if (provider === "mangadex") {
     return getMangaDexPages(chapterId);
   }
+  if (provider === "comick") {
+    return getComickPages(chapterId);
+  }
   return [];
 }
 
@@ -69,4 +81,12 @@ async function listFromMangaDex(
     return [];
   }
   return listMangaDexChapters(seriesId);
+}
+
+async function listFromComick(title: string): Promise<ProviderChapter[]> {
+  const comicId = await findComickId(title);
+  if (!comicId) {
+    return [];
+  }
+  return listComickChapters(comicId);
 }
