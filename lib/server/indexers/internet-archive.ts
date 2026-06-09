@@ -89,6 +89,9 @@ function normalizeDoc(
     indexerId: config.id,
     indexerName: config.name,
     sourceUrl,
+    // Archive.org items expose their files directly over HTTP, so offer a
+    // no-torrent / no-debrid path resolved from the item metadata at add time.
+    directSource: { kind: "internet_archive", identifier: doc.identifier },
   };
 }
 

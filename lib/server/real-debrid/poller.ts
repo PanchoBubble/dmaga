@@ -1,7 +1,9 @@
+import path from "node:path";
+
 import { and, desc, eq, isNull, lte, or, type SQL } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
-import { debridItems, debridLinks, pollingJobs } from "@/lib/db/schema";
+import { debridItems, debridLinks, mediaItems, pollingJobs } from "@/lib/db/schema";
 import type { DebridItemStatus } from "@/lib/debrid";
 import { env } from "@/lib/server/env";
 import { createAuthenticatedRealDebridClient } from "@/lib/server/real-debrid/auth-service";
@@ -11,6 +13,13 @@ import type {
   RealDebridTorrentStatus,
   UnrestrictLinkResponse,
 } from "@/lib/server/real-debrid/types";
+import {
+  isQbCompleted,
+  isQbErrored,
+  QBittorrentClient,
+  type QbFile,
+  type QbTorrent,
+} from "@/lib/server/torrents/qbittorrent";
 
 const BASE_BACKOFF_MS = 15_000;
 const MAX_BACKOFF_MS = 5 * 60_000;
@@ -104,11 +113,17 @@ export async function pollDueDebridItems({
       return summary;
     }
 
-    const client = await createAuthenticatedRealDebridClient();
+    // Resolve the Real-Debrid client lazily and once: a queue of only
+    // torrent-provider items must not require an RD account to exist.
+    let rdClient: RealDebridClient | undefined;
+    const getRdClient = async () => {
+      rdClient ??= await createAuthenticatedRealDebridClient();
+      return rdClient;
+    };
 
     for (const job of jobs) {
       summary.checked += 1;
-      const result = await pollOneJob(job, client, now);
+      const result = await pollOneJob(job, getRdClient, now);
       summary[result] += 1;
     }
 
@@ -152,11 +167,13 @@ async function findDueJobs(now: Date, limit: number) {
     .limit(limit);
 }
 
+type PollOutcome = "completed" | "rescheduled" | "failed";
+
 async function pollOneJob(
   job: PollingJobRow,
-  client: RealDebridClient,
+  getRdClient: () => Promise<RealDebridClient>,
   now: Date,
-): Promise<"completed" | "rescheduled" | "failed"> {
+): Promise<PollOutcome> {
   const [item] = await db
     .select()
     .from(debridItems)
@@ -168,16 +185,21 @@ async function pollOneJob(
     return "completed";
   }
 
-  if (!item.realDebridTorrentId) {
-    await markJobError(job, item, "Missing Real-Debrid torrent id.", now);
-    return "failed";
-  }
-
   await db
     .update(pollingJobs)
     .set({ lockedAt: now, lockToken: crypto.randomUUID(), updatedAt: now })
     .where(eq(pollingJobs.id, job.id));
 
+  if (item.provider === "torrent") {
+    return pollTorrentJob(job, item, now);
+  }
+
+  if (!item.realDebridTorrentId) {
+    await markJobError(job, item, "Missing Real-Debrid torrent id.", now);
+    return "failed";
+  }
+
+  const client = await getRdClient();
   try {
     const torrent = await getSelectableTorrent(client, item.realDebridTorrentId);
     const status = mapTorrentStatus(torrent.status);
@@ -229,6 +251,138 @@ async function pollOneJob(
     await markJobError(job, item, message, now);
     return "failed";
   }
+}
+
+/**
+ * Polls a `torrent`-provider item against qBittorrent: maps the torrent's state
+ * to our status, and on completion writes {@link debridLinks} pointing at the
+ * files on disk (so the local file-serving route can stream them). Looks up the
+ * info hash from the linked media item — that's the qBittorrent torrent handle.
+ */
+async function pollTorrentJob(
+  job: PollingJobRow,
+  item: DebridItemRow,
+  now: Date,
+): Promise<PollOutcome> {
+  const [media] = await db
+    .select({ infoHash: mediaItems.infoHash })
+    .from(mediaItems)
+    .where(eq(mediaItems.id, item.mediaItemId))
+    .limit(1);
+
+  const infoHash = media?.infoHash;
+  if (!infoHash) {
+    await markJobError(job, item, "Missing info hash for torrent item.", now);
+    return "failed";
+  }
+
+  try {
+    const client = new QBittorrentClient();
+    const torrent = await client.getTorrent(infoHash);
+
+    // Not registered yet (just handed off / still resolving metadata) — retry.
+    if (!torrent) {
+      await db
+        .update(debridItems)
+        .set({ status: "adding", updatedAt: now })
+        .where(eq(debridItems.id, item.id));
+      await rescheduleJob(job, now);
+      return "rescheduled";
+    }
+
+    const status = mapQbStatus(torrent.state);
+    const progress = clampProgress(torrent.progress * 100);
+
+    await db
+      .update(debridItems)
+      .set({
+        status,
+        progress,
+        errorMessage: status === "error" ? "qBittorrent reported an error." : null,
+        completedAt: status === "ready" ? now : item.completedAt,
+        updatedAt: now,
+      })
+      .where(eq(debridItems.id, item.id));
+
+    if (status === "ready") {
+      const files = await client.getFiles(infoHash);
+      await insertTorrentLinks(item.id, torrent, files);
+      await finishJob(job.id, "complete", now);
+      return "completed";
+    }
+
+    if (status === "error") {
+      await finishJob(job.id, "error", now, "qBittorrent reported an error.");
+      return "failed";
+    }
+
+    await rescheduleJob(job, now);
+    return "rescheduled";
+  } catch (error) {
+    // qBittorrent being briefly unreachable shouldn't permanently fail the
+    // item — reschedule (with backoff) and keep its current status.
+    const message =
+      error instanceof Error ? error.message : "Unable to poll qBittorrent item.";
+    await db
+      .update(pollingJobs)
+      .set({
+        attempts: job.attempts + 1,
+        nextPollAt: new Date(now.getTime() + backoffMs(job.attempts + 1)),
+        lockedAt: null,
+        lockToken: null,
+        lastError: message,
+        updatedAt: now,
+      })
+      .where(eq(pollingJobs.id, job.id));
+    return "rescheduled";
+  }
+}
+
+/**
+ * Replaces an item's links with rows pointing at the torrent's files on disk.
+ * `file.name` is relative to the torrent's save path, so the absolute on-disk
+ * path is `save_path/name` — valid in the app container since both share the
+ * /downloads mount. Returns the number of links created.
+ */
+async function insertTorrentLinks(
+  debridItemId: string,
+  torrent: QbTorrent,
+  files: QbFile[],
+): Promise<number> {
+  await db.delete(debridLinks).where(eq(debridLinks.debridItemId, debridItemId));
+
+  if (!files.length) {
+    return 0;
+  }
+
+  await db.insert(debridLinks).values(
+    files.map((file) => {
+      const localPath = path.join(torrent.save_path, file.name);
+      return {
+        debridItemId,
+        fileName: path.basename(file.name),
+        fileSizeBytes: file.size ?? null,
+        host: null,
+        originalLink: localPath,
+        unrestrictedLink: null,
+        localPath,
+        mimeType: null,
+        streamable: isLikelyVideoFile(file.name),
+      } satisfies typeof debridLinks.$inferInsert;
+    }),
+  );
+
+  return files.length;
+}
+
+function mapQbStatus(state: string): DebridItemStatus {
+  if (isQbErrored(state)) {
+    return "error";
+  }
+  if (isQbCompleted(state)) {
+    return "ready";
+  }
+  return "downloading";
 }
 
 async function getSelectableTorrent(client: RealDebridClient, torrentId: string) {

@@ -1,4 +1,8 @@
-import type { DebridAvailability, MediaOriginSection } from "@/lib/search";
+import type {
+  DebridAvailability,
+  DirectSource,
+  MediaOriginSection,
+} from "@/lib/search";
 
 /**
  * Granular lifecycle of a locally-tracked Real-Debrid item. Mirrors the
@@ -15,6 +19,13 @@ export type DebridItemStatus =
   | "error"
   | "deleted";
 
+/**
+ * How a tracked item is delivered. Mirrors the `media_provider` Postgres enum.
+ * `real_debrid` is the original path; `torrent` is a local qBittorrent download
+ * served from disk; `direct` streams from an indexer-provided HTTP URL.
+ */
+export type MediaProvider = "real_debrid" | "torrent" | "direct";
+
 /** Fields the client sends to add a search result to Real-Debrid. */
 export type AddToDebridRequest = {
   title: string;
@@ -30,6 +41,8 @@ export type AddToDebridRequest = {
   indexerName: string;
   /** Indexer-provided source. Can be a details page or a .torrent URL. */
   sourceUrl?: string;
+  /** Present for direct-HTTP results (e.g. Internet Archive), resolved at add. */
+  directSource?: DirectSource;
   /** Section/category that produced this result. */
   originSection?: MediaOriginSection;
 };
@@ -62,6 +75,7 @@ export type AddedItemDto = {
   sizeBytes: number | null;
   status: DebridItemStatus;
   availability: DebridAvailability;
+  provider: MediaProvider;
   progress: number;
   torrentId: string | null;
   infoHash: string | null;

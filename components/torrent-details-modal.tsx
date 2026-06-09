@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   Copy,
   Download,
+  Globe,
+  HardDriveDownload,
   Loader2,
   Magnet,
   Star,
@@ -62,6 +64,8 @@ export function TorrentDetailsModal({ result, onClose }: TorrentDetailsModalProp
   const router = useRouter();
   const entry = useDebridStore((state) => state.entries[entryKey(result)]);
   const addToDebrid = useDebridStore((state) => state.addToDebrid);
+  const addToTorrent = useDebridStore((state) => state.addToTorrent);
+  const addDirect = useDebridStore((state) => state.addDirect);
   const savedEntry = useSavedStore((state) => state.entries[entryKey(result)]);
   const toggleSaved = useSavedStore((state) => state.toggleSaved);
 
@@ -72,6 +76,7 @@ export function TorrentDetailsModal({ result, onClose }: TorrentDetailsModalProp
   const isReady = availability === "ready";
   const magnetHref = magnetLinkFor(result);
   const canAdd = Boolean(magnetHref || isTorrentFileUrl(result.sourceUrl));
+  const canAddTorrent = Boolean(magnetHref || result.infoHash);
   const badge = availability !== "unknown" ? availabilityBadge[availability] : null;
 
   // Close on Escape, matching the indexer filter modal.
@@ -87,6 +92,20 @@ export function TorrentDetailsModal({ result, onClose }: TorrentDetailsModalProp
 
   async function handleAdd() {
     const response = await addToDebrid(result);
+    if (response) {
+      router.refresh();
+    }
+  }
+
+  async function handleAddTorrent() {
+    const response = await addToTorrent(result);
+    if (response) {
+      router.refresh();
+    }
+  }
+
+  async function handleAddDirect() {
+    const response = await addDirect(result);
     if (response) {
       router.refresh();
     }
@@ -218,6 +237,18 @@ export function TorrentDetailsModal({ result, onClose }: TorrentDetailsModalProp
                 <Magnet className="size-4" />
                 Magnet
               </a>
+            </Button>
+          ) : null}
+          {!isReady && !isAdding && canAddTorrent ? (
+            <Button onClick={() => void handleAddTorrent()} variant="outline">
+              <HardDriveDownload className="size-4" />
+              Torrent
+            </Button>
+          ) : null}
+          {!isReady && !isAdding && result.directSource ? (
+            <Button onClick={() => void handleAddDirect()} variant="outline">
+              <Globe className="size-4" />
+              Direct
             </Button>
           ) : null}
           {isReady ? (

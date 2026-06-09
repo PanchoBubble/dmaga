@@ -44,6 +44,14 @@ export const hostDownloadStatusEnum = pgEnum("host_download_status", [
   "error",
   "cancelled",
 ]);
+// Where a tracked item's content comes from. `real_debrid` is the original
+// (and default) path; `torrent` is a local qBittorrent download served from
+// disk; `direct` streams straight from an indexer-provided HTTP URL.
+export const mediaProviderEnum = pgEnum("media_provider", [
+  "real_debrid",
+  "torrent",
+  "direct",
+]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -179,6 +187,7 @@ export const debridItems = pgTable(
     mediaItemId: uuid("media_item_id")
       .notNull()
       .references(() => mediaItems.id, { onDelete: "cascade" }),
+    provider: mediaProviderEnum("provider").notNull().default("real_debrid"),
     realDebridAccountId: uuid("real_debrid_account_id").references(
       () => realDebridAccounts.id,
       { onDelete: "set null" },
@@ -234,6 +243,10 @@ export const debridLinks = pgTable(
     host: text("host"),
     originalLink: text("original_link").notNull(),
     unrestrictedLink: text("unrestricted_link"),
+    // Absolute path of the file on disk (under the downloads dir) for
+    // torrent-provider items. Null for Real-Debrid / direct links, which
+    // resolve to a remote URL instead.
+    localPath: text("local_path"),
     mimeType: text("mime_type"),
     streamable: boolean("streamable").notNull().default(false),
     ...timestamps,

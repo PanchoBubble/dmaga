@@ -10,6 +10,13 @@ export type DebridAvailability = "ready" | "downloading" | "saved" | "unknown";
 /** Section/category a torrent was added from, used to organize Added items. */
 export type MediaOriginSection = "movie" | "show" | "mal" | "manga" | "other";
 
+/**
+ * A result that can be fetched directly over HTTP (no torrent, no Real-Debrid).
+ * Carries just enough to resolve the file(s) at add time. Currently only
+ * Internet Archive items, resolved via their metadata API.
+ */
+export type DirectSource = { kind: "internet_archive"; identifier: string };
+
 /** A normalized torrent search result as sent to the client. */
 export type SearchResultDto = {
   id: string;
@@ -28,6 +35,8 @@ export type SearchResultDto = {
   magnetUrl?: string;
   infoHash?: string;
   sourceUrl?: string;
+  /** Present when the result can be streamed/downloaded directly over HTTP. */
+  directSource?: DirectSource;
   /** Local Real-Debrid state for this torrent, when known. */
   debridState: DebridAvailability;
   /** True when the user has starred (favorited) this torrent. */

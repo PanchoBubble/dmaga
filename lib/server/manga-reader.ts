@@ -1,5 +1,8 @@
 import "server-only";
 
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+
 import { classifyMangaFile } from "@/lib/manga";
 import { resolveDownloadStream } from "@/lib/server/real-debrid/playback";
 
@@ -30,6 +33,12 @@ export async function fetchMangaArchiveBuffer(
     throw new Error("This file is not a readable archive.");
   }
 
+  // Torrent-provider archives live on disk — read them directly instead of
+  // round-tripping the file back through our own /api/files route.
+  if (link.localPath) {
+    return readArchiveFromDisk(link.localPath, options.onDownloadProgress);
+  }
+
   const response = await fetch(link.url, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to fetch manga archive.");
@@ -55,6 +64,24 @@ export async function fetchMangaArchiveBuffer(
   }
 
   return Buffer.from(await response.arrayBuffer());
+}
+
+async function readArchiveFromDisk(
+  filePath: string,
+  onDownloadProgress?: (progress: MangaArchiveDownloadProgress) => void,
+): Promise<Buffer> {
+  const totalBytes = (await stat(filePath)).size;
+  const chunks: Buffer[] = [];
+  let receivedBytes = 0;
+
+  for await (const chunk of createReadStream(filePath)) {
+    const buffer = chunk as Buffer;
+    chunks.push(buffer);
+    receivedBytes += buffer.byteLength;
+    onDownloadProgress?.({ receivedBytes, totalBytes });
+  }
+
+  return Buffer.concat(chunks);
 }
 
 function parseContentLength(value: string | null): number | undefined {

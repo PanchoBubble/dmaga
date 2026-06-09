@@ -1,12 +1,16 @@
 "use client";
 
 import { ChevronDown, ChevronRight, LayoutGrid, Rows3 } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { AddedItemCard, AddedItemRow } from "@/components/added-item-card";
 import { Button } from "@/components/ui/button";
-import type { AddedItemDto } from "@/lib/debrid";
+import { isActiveDebridStatus, type AddedItemDto } from "@/lib/debrid";
 import { cn } from "@/lib/utils";
+
+/** Re-fetch the server-rendered list this often while an item is downloading. */
+const ACTIVE_POLL_MS = 4000;
 
 type AddedView = "card" | "row";
 
@@ -67,6 +71,19 @@ export function AddedItemsSections({ items }: { items: AddedItemDto[] }) {
     {},
   );
   const [view, changeView] = useAddedView();
+
+  // The page is server-rendered with no live stream, so poll while anything is
+  // still downloading — router.refresh() re-runs the server component and feeds
+  // fresh progress in without a full reload. Stops once everything settles.
+  const router = useRouter();
+  const hasActiveItems = items.some((item) => isActiveDebridStatus(item.status));
+  useEffect(() => {
+    if (!hasActiveItems) {
+      return;
+    }
+    const timer = window.setInterval(() => router.refresh(), ACTIVE_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [hasActiveItems, router]);
 
   function toggleSection(key: string) {
     setCollapsedSections((current) => ({

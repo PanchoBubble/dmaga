@@ -22,11 +22,24 @@ export type DebridEntry = {
 type DebridState = {
   /** Per-result add state, keyed by {@link entryKey}. */
   entries: Record<string, DebridEntry>;
+  /** Sends a result to Real-Debrid. */
   addToDebrid: (result: SearchResultDto) => Promise<AddToDebridResponse | null>;
+  /** Sends a result to the local qBittorrent (non-debrid) download path. */
+  addToTorrent: (result: SearchResultDto) => Promise<AddToDebridResponse | null>;
+  /** Adds a direct-HTTP source (e.g. Internet Archive) — no torrent, no debrid. */
+  addDirect: (result: SearchResultDto) => Promise<AddToDebridResponse | null>;
 };
 
 const POLL_INTERVAL_MS = 2_000;
 const MAX_POLL_ATTEMPTS = 90;
+
+/** Zustand's setter signature, shared by the add flow and the poller. */
+type SetState = (
+  partial:
+    | DebridState
+    | Partial<DebridState>
+    | ((state: DebridState) => DebridState | Partial<DebridState>),
+) => void;
 
 /** Stable key for a result: prefer the info hash so dedup'd results share state. */
 export function entryKey(result: Pick<SearchResultDto, "id" | "infoHash">): string {
@@ -35,78 +48,67 @@ export function entryKey(result: Pick<SearchResultDto, "id" | "infoHash">): stri
 
 export const useDebridStore = create<DebridState>((set, get) => ({
   entries: {},
-  addToDebrid: async (result) => {
-    const key = entryKey(result);
+  addToDebrid: (result) =>
+    performAdd(result, "/api/debrid/add", "Failed to add to Real-Debrid.", set, get),
+  addToTorrent: (result) =>
+    performAdd(result, "/api/torrents/add", "Failed to add to qBittorrent.", set, get),
+  addDirect: (result) =>
+    performAdd(result, "/api/direct/add", "Failed to add direct source.", set, get),
+}));
 
-    if (get().entries[key]?.status === "adding") {
-      return null;
-    }
+/**
+ * Shared add flow: optimistically marks the result as adding, POSTs to the
+ * given endpoint, then reflects the returned status and starts polling when the
+ * item is still working. Real-Debrid and torrent adds share this because both
+ * return an {@link AddToDebridResponse} and are tracked by the same poller.
+ */
+async function performAdd(
+  result: SearchResultDto,
+  endpoint: string,
+  fallbackError: string,
+  set: SetState,
+  get: () => DebridState,
+): Promise<AddToDebridResponse | null> {
+  const key = entryKey(result);
 
-    set((state) => ({
-      entries: {
-        ...state.entries,
-        [key]: { status: "adding", availability: "downloading", progress: 0 },
-      },
-    }));
+  if (get().entries[key]?.status === "adding") {
+    return null;
+  }
 
-    const body: AddToDebridRequest = {
-      title: result.displayTitle ?? result.title,
-      previewImageUrl: result.previewImageUrl,
-      infoHash: result.infoHash,
-      magnetUrl: result.magnetUrl,
-      sizeBytes: result.sizeBytes,
-      seeders: result.seeders,
-      leechers: result.leechers,
-      publishedAt: result.publishedAt,
-      indexerId: result.indexerId,
-      indexerName: result.indexerName,
-      sourceUrl: result.sourceUrl,
-      originSection: result.originSection,
-    };
+  set((state) => ({
+    entries: {
+      ...state.entries,
+      [key]: { status: "adding", availability: "downloading", progress: 0 },
+    },
+  }));
 
-    try {
-      const response = await fetch("/api/debrid/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+  const body: AddToDebridRequest = {
+    title: result.displayTitle ?? result.title,
+    previewImageUrl: result.previewImageUrl,
+    infoHash: result.infoHash,
+    magnetUrl: result.magnetUrl,
+    sizeBytes: result.sizeBytes,
+    seeders: result.seeders,
+    leechers: result.leechers,
+    publishedAt: result.publishedAt,
+    indexerId: result.indexerId,
+    indexerName: result.indexerName,
+    sourceUrl: result.sourceUrl,
+    directSource: result.directSource,
+    originSection: result.originSection,
+  };
 
-      const payload = (await response.json()) as
-        | AddToDebridResponse
-        | { error?: string };
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
-      if (!response.ok || !("availability" in payload)) {
-        const message =
-          ("error" in payload && payload.error) || "Failed to add to Real-Debrid.";
-        set((state) => ({
-          entries: {
-            ...state.entries,
-            [key]: {
-              status: "error",
-              availability: "unknown",
-              progress: 0,
-              error: message,
-            },
-          },
-        }));
-        return null;
-      }
+    const payload = (await response.json()) as AddToDebridResponse | { error?: string };
 
-      set((state) => ({
-        entries: {
-          ...state.entries,
-          [key]: {
-            status: isActiveDebridStatus(payload.status) ? "adding" : "done",
-            availability: payload.availability,
-            progress: payload.progress,
-          },
-        },
-      }));
-      if (isActiveDebridStatus(payload.status)) {
-        pollDebridEntry(key, payload.debridItemId, set);
-      }
-      return payload;
-    } catch (error) {
+    if (!response.ok || !("availability" in payload)) {
+      const message = ("error" in payload && payload.error) || fallbackError;
       set((state) => ({
         entries: {
           ...state.entries,
@@ -114,24 +116,47 @@ export const useDebridStore = create<DebridState>((set, get) => ({
             status: "error",
             availability: "unknown",
             progress: 0,
-            error: error instanceof Error ? error.message : "Failed to add.",
+            error: message,
           },
         },
       }));
       return null;
     }
-  },
-}));
+
+    set((state) => ({
+      entries: {
+        ...state.entries,
+        [key]: {
+          status: isActiveDebridStatus(payload.status) ? "adding" : "done",
+          availability: payload.availability,
+          progress: payload.progress,
+        },
+      },
+    }));
+    if (isActiveDebridStatus(payload.status)) {
+      pollDebridEntry(key, payload.debridItemId, set);
+    }
+    return payload;
+  } catch (error) {
+    set((state) => ({
+      entries: {
+        ...state.entries,
+        [key]: {
+          status: "error",
+          availability: "unknown",
+          progress: 0,
+          error: error instanceof Error ? error.message : "Failed to add.",
+        },
+      },
+    }));
+    return null;
+  }
+}
 
 function pollDebridEntry(
   key: string,
   debridItemId: string,
-  set: (
-    partial:
-      | DebridState
-      | Partial<DebridState>
-      | ((state: DebridState) => DebridState | Partial<DebridState>),
-  ) => void,
+  set: SetState,
   attempt = 0,
 ) {
   if (attempt >= MAX_POLL_ATTEMPTS) {
