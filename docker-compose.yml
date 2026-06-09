@@ -24,15 +24,12 @@ services:
       # Must match the pinned `networks.default` subnet below.
       FIREWALL_OUTBOUND_SUBNETS: 172.30.0.0/24
       # Open gluetun's firewall for the ports its netns-sharing siblings serve on
-      # the Compose network: FlareSolverr (8191), tinyproxy (8888), and
-      # qBittorrent's WebUI (8080) + torrent listen port (6881).
-      FIREWALL_INPUT_PORTS: 8191,8888,8080,6881
+      # the Compose network: FlareSolverr (8191) and tinyproxy (8888).
+      FIREWALL_INPUT_PORTS: 8191,8888
     ports:
       # FlareSolverr's debug endpoint (it shares this container's netns). The app
       # itself now publishes :3000 directly; only indexer egress rides the VPN.
       - "8191:8191"
-      # qBittorrent WebUI (shares this netns) for optional LAN access / setup.
-      - "8080:8080"
     # gluetun's image defines no Docker HEALTHCHECK, so `depends_on:
     # service_healthy` has nothing to wait on unless we add one. gluetun runs an
     # internal healthcheck server on 127.0.0.1:9999 and `/gluetun-entrypoint
@@ -91,10 +88,10 @@ services:
       # Override with http://MACHINE_IP:3000 when accessing from other LAN devices.
       NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
       HOST_DOWNLOAD_DIR: "${HOST_DOWNLOAD_DIR:-/downloads}"
-      # Non-debrid downloads: qBittorrent rides the gluetun (VPN) netns, so its
-      # WebUI is reachable as `gluetun:8080` on the Compose network. Downloads
-      # land under TORRENT_DOWNLOAD_DIR, which is the shared /downloads mount.
-      QBITTORRENT_URL: "${QBITTORRENT_URL:-http://gluetun:8080}"
+      # Non-debrid downloads: qBittorrent runs on the normal Compose network
+      # (off the VPN — NordVPN blocks P2P), reachable as `qbittorrent:8080`.
+      # Downloads land under TORRENT_DOWNLOAD_DIR (the shared /downloads mount).
+      QBITTORRENT_URL: "${QBITTORRENT_URL:-http://qbittorrent:8080}"
       QBITTORRENT_USERNAME: "${QBITTORRENT_USERNAME:-admin}"
       QBITTORRENT_PASSWORD: "${QBITTORRENT_PASSWORD:-}"
       TORRENT_DOWNLOAD_DIR: "${TORRENT_DOWNLOAD_DIR:-/downloads}"
@@ -141,7 +138,7 @@ services:
     stop_grace_period: 10s
     # Polls Real-Debrid AND qBittorrent (for torrent-provider items). It stays
     # off the VPN and talks to Postgres/Redis/Real-Debrid directly; qBittorrent
-    # is reachable via the gluetun netns at gluetun:8080 on the Compose network.
+    # is on the normal Compose network, reachable at qbittorrent:8080.
     environment:
       DATABASE_URL: "${DATABASE_URL:-postgresql://dmaga:dmaga@postgres:5432/dmaga}"
       REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
@@ -151,7 +148,7 @@ services:
       MYANIMELIST_CLIENT_SECRET: "${MYANIMELIST_CLIENT_SECRET:-}"
       TOKEN_ENCRYPTION_KEY: "${TOKEN_ENCRYPTION_KEY:-}"
       HOST_DOWNLOAD_DIR: "${HOST_DOWNLOAD_DIR:-/downloads}"
-      QBITTORRENT_URL: "${QBITTORRENT_URL:-http://gluetun:8080}"
+      QBITTORRENT_URL: "${QBITTORRENT_URL:-http://qbittorrent:8080}"
       QBITTORRENT_USERNAME: "${QBITTORRENT_USERNAME:-admin}"
       QBITTORRENT_PASSWORD: "${QBITTORRENT_PASSWORD:-}"
       TORRENT_DOWNLOAD_DIR: "${TORRENT_DOWNLOAD_DIR:-/downloads}"
@@ -219,23 +216,27 @@ services:
   # /downloads mount (bind-backed onto the external T7 SSD), and the app/poller
   # drive it via its WebUI at gluetun:8080. PUID/PGID 1000 match the T7 exfat
   # mount owner so qBittorrent can write there.
+  # qBittorrent runs on the normal Compose network, NOT the gluetun VPN netns:
+  # NordVPN drops BitTorrent P2P/UDP, so peers never connect through the tunnel.
+  # Trade-off: torrent traffic egresses on the host's real IP. Indexer lookups
+  # still ride the VPN (via the proxy). The app reaches it at qbittorrent:8080.
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: dmaga-qbittorrent
     restart: unless-stopped
-    network_mode: service:gluetun
     environment:
       PUID: "1000"
       PGID: "1000"
       TZ: Europe/London
       WEBUI_PORT: "8080"
       TORRENTING_PORT: "6881"
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
     volumes:
       - qbittorrent-config:/config
       - media-downloads:/downloads
-    depends_on:
-      gluetun:
-        condition: service_healthy
 
 networks:
   # Pinned so the gluetun killswitch allowance (FIREWALL_OUTBOUND_SUBNETS above)
