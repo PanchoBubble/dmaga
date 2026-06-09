@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { MangaChapters } from "@/components/manga-chapters";
 import { TitleSources } from "@/components/title-sources";
 import { parseMangaCatalogSlug } from "@/lib/manga";
 import { fetchMangaCatalogItem } from "@/lib/server/metadata/jikan-manga";
@@ -89,9 +90,12 @@ export default async function MangaTitlePage({ params }: MangaTitlePageProps) {
         </div>
       </section>
 
-      {/* One bare-title search, organized by the volume/chapter grouping —
-          no separate unit/number dropdown (it over-constrained the query and
-          fought the grouping). */}
+      {/* Primary path: a full online chapter list (MangaDex/Comick), read
+          directly with no torrent/debrid. */}
+      <MangaChapters malId={item.id} slug={item.slug} title={item.title} />
+
+      {/* Fallback: torrent / Internet Archive sources, organized by the
+          volume/chapter grouping (no unit/number dropdown). */}
       <TitleSources
         args={{
           query: item.query,
