@@ -197,6 +197,13 @@ function mangaCategoriesForConfig(config: IndexerConfig): string[] | null {
     return null;
   }
 
+  // Internet Archive / MiNERVA do full-text search and ignore categories, but
+  // their `texts` results are exactly scanned manga/books — include them (no
+  // category filter) so manga pages get the instant-read Direct option.
+  if (config.type === "internet_archive" || config.type === "minerva") {
+    return [];
+  }
+
   if (config.type === "torznab") {
     const configured = config.categories ?? [];
     if (configured.length === 0 || configured.some(isMangaCategory)) {

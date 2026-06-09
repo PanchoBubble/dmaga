@@ -57,10 +57,22 @@ export async function searchMangaCatalog(
 export async function fetchPopularMangaCatalog(
   limit = 12,
 ): Promise<MangaCatalogItem[]> {
-  const params = new URLSearchParams({
-    limit: String(limit),
-    filter: "bypopularity",
-  });
+  return fetchTopManga("bypopularity", limit);
+}
+
+/**
+ * Fetches a row from Jikan's /top/manga endpoint. `filter` is one of Jikan's
+ * supported values (`bypopularity`, `publishing`, `favorite`) or omitted for
+ * top-by-score. Used to build the manga browse rows.
+ */
+export async function fetchTopManga(
+  filter: "bypopularity" | "publishing" | "favorite" | null,
+  limit = 12,
+): Promise<MangaCatalogItem[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (filter) {
+    params.set("filter", filter);
+  }
 
   return fetchMangaList(`/top/manga?${params}`);
 }
@@ -118,7 +130,10 @@ function toMangaCatalogItem(manga: RawJikanManga): MangaCatalogItem | null {
     slug: `mal-${manga.mal_id}-${slugify(manga.title)}`,
     title: manga.title,
     subtitle: bits.length ? bits.join(" · ") : "Manga",
-    query: `${manga.title} manga`,
+    // Bare title — manga searches are already scoped to manga categories on
+    // Nyaa/Tokyo Toshokan, and appending "manga" wrongly excludes release
+    // titles (e.g. "Berserk v01-40") that don't contain the word.
+    query: manga.title,
     poster,
     synopsis: manga.synopsis ?? undefined,
     score: manga.score ?? undefined,

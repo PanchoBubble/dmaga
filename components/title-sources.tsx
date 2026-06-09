@@ -52,7 +52,13 @@ export function TitleSources({
     useTitleSources(args, sortKey, selectedIndexerIds);
 
   const isLoading = status === "loading";
-  const mangaGroups = mode === "manga" ? groupMangaSourceResults(results) : [];
+  // In manga mode, drop dead torrents (0 seeds = won't download) but always keep
+  // direct sources (Internet Archive), which stream with no peers.
+  const mangaResults =
+    mode === "manga"
+      ? results.filter((result) => result.directSource || result.seeders !== 0)
+      : results;
+  const mangaGroups = mode === "manga" ? groupMangaSourceResults(mangaResults) : [];
 
   useEffect(() => {
     hydrateSelection();
