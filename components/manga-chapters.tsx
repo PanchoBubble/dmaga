@@ -119,9 +119,14 @@ export function MangaChapters({
 }
 
 function chapterLabel(chapter: ProviderChapter): string {
-  const head = chapter.number ? `Chapter ${chapter.number}` : "Oneshot";
   const vol = chapter.volume ? `Vol. ${chapter.volume} · ` : "";
-  return chapter.title ? `${vol}${head} — ${chapter.title}` : `${vol}${head}`;
+  if (chapter.number) {
+    return chapter.title
+      ? `${vol}Chapter ${chapter.number} — ${chapter.title}`
+      : `${vol}Chapter ${chapter.number}`;
+  }
+  // No parsed number — show the provider's own label, not a generic "Oneshot".
+  return `${vol}${chapter.title ?? "Oneshot"}`;
 }
 
 function chapterHref(chapter: ProviderChapter, title: string, slug: string): string {

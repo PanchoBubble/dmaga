@@ -47,12 +47,24 @@ export async function listWeebCentralChapters(
       continue;
     }
     seen.add(id);
+
+    // The chapter label sits in the anchor's empty-class span ("Chapter 200",
+    // but some series use "Episode 5", a name, etc.). Show whatever it is, and
+    // parse a number broadly (keyword form, else any leading number).
+    const block = match[0];
+    const label = block.match(/<span class="">\s*([^<]+?)\s*<\/span>/)?.[1] ?? null;
+    const number =
+      label?.match(/\b(?:chapter|chap|episode|ep|ch)\.?\s*([\d.]+)/i)?.[1] ??
+      label?.match(/(\d+(?:\.\d+)?)/)?.[1] ??
+      null;
+    const isPlainChapter = label ? /^chapter\s+[\d.]+$/i.test(label) : false;
+
     chapters.push({
       provider: "weebcentral",
       id,
-      number: match[0].match(/Chapter\s+([\d.]+)/i)?.[1] ?? null,
+      number,
       volume: null,
-      title: null,
+      title: !label || isPlainChapter ? null : label,
       pages: null,
       lang: "en",
       group: null,
