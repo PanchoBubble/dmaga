@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  Filter,
-  Loader2,
-} from "lucide-react";
+import { AlertTriangle, Filter, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { IndexerFilterModal } from "@/components/indexer-filter-modal";
@@ -14,7 +8,6 @@ import { TorrentResultCard } from "@/components/torrent-result-card";
 import { Button } from "@/components/ui/button";
 import { useSearchStore } from "@/hooks/use-search-store";
 import { useTitleSources, type TitleSourcesArgs } from "@/hooks/use-title-sources";
-import { groupMangaSourceResults, type MangaSourceGroup } from "@/lib/manga";
 import { sortOptions, type SortKey } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
@@ -53,12 +46,12 @@ export function TitleSources({
 
   const isLoading = status === "loading";
   // In manga mode, drop dead torrents (0 seeds = won't download) but always keep
-  // direct sources (Internet Archive), which stream with no peers.
-  const mangaResults =
+  // direct sources (Internet Archive), which stream with no peers. Shown as a
+  // flat seed-sorted list — structured reading comes from the chapter list above.
+  const sourceResults =
     mode === "manga"
       ? results.filter((result) => result.directSource || result.seeders !== 0)
       : results;
-  const mangaGroups = mode === "manga" ? groupMangaSourceResults(mangaResults) : [];
 
   useEffect(() => {
     hydrateSelection();
@@ -143,21 +136,17 @@ export function TitleSources({
         </div>
       ) : null}
 
-      {!hasEmptyIndexerScope && results.length ? (
-        mode === "manga" ? (
-          <MangaVolumeGroups groups={mangaGroups} mode={mode} />
-        ) : (
-          <section className="space-y-3">
-            {results.map((result, index) => (
-              <TorrentResultCard
-                index={index}
-                key={result.id}
-                mode={mode}
-                result={result}
-              />
-            ))}
-          </section>
-        )
+      {!hasEmptyIndexerScope && sourceResults.length ? (
+        <section className="space-y-3">
+          {sourceResults.map((result, index) => (
+            <TorrentResultCard
+              index={index}
+              key={result.id}
+              mode={mode}
+              result={result}
+            />
+          ))}
+        </section>
       ) : !hasEmptyIndexerScope && isLoading ? (
         <section className="space-y-3" aria-busy="true">
           {Array.from({ length: 2 }).map((_, index) => (
@@ -183,82 +172,6 @@ export function TitleSources({
         </Panel>
       ) : null}
     </div>
-  );
-}
-
-/**
- * Volume/chapter groups rendered as a collapsible drilldown: each volume shows
- * its source count and expands to reveal provider cards, mirroring the show →
- * episode → sources flow instead of dumping every source at once. A lone group
- * starts expanded since there's nothing to scan past.
- */
-function MangaVolumeGroups({
-  groups,
-  mode,
-}: {
-  groups: MangaSourceGroup[];
-  mode: "download" | "manga";
-}) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const soloKey = groups.length === 1 ? groups[0].key : null;
-
-  function toggle(key: string) {
-    setExpanded((current) => ({ ...current, [key]: !current[key] }));
-  }
-
-  return (
-    <section className="space-y-2">
-      {groups.map((group) => {
-        const isOpen = expanded[group.key] ?? group.key === soloKey;
-        const contentId = `manga-group-${group.key}`;
-        return (
-          <section key={group.key}>
-            <button
-              aria-controls={contentId}
-              aria-expanded={isOpen}
-              className="flex w-full items-center gap-2 border-2 border-foreground bg-card p-3 text-left shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => toggle(group.key)}
-              type="button"
-            >
-              {isOpen ? (
-                <ChevronDown className="size-5 shrink-0" />
-              ) : (
-                <ChevronRight className="size-5 shrink-0" />
-              )}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-base font-black leading-tight">
-                  {group.title}
-                </span>
-                {group.subtitle ? (
-                  <span className="block truncate text-xs font-semibold text-muted-foreground">
-                    {group.subtitle}
-                  </span>
-                ) : null}
-              </span>
-              <span className="shrink-0 border-2 border-foreground bg-background px-2 py-0.5 text-xs font-black tabular-nums">
-                {group.results.length}
-              </span>
-            </button>
-
-            {isOpen ? (
-              <div
-                className="mt-2 space-y-3 border-l-2 border-foreground pl-3"
-                id={contentId}
-              >
-                {group.results.map((result, index) => (
-                  <TorrentResultCard
-                    index={index}
-                    key={result.id}
-                    mode={mode}
-                    result={result}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </section>
-        );
-      })}
-    </section>
   );
 }
 
