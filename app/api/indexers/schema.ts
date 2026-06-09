@@ -2,7 +2,16 @@ import { z } from "zod";
 
 /** Shared request validation for the indexer settings endpoints. */
 
-export const indexerTypeSchema = z.enum(["torznab", "cardigann", "torrentio"]);
+// Keep in sync with `indexerTypeEnum` in lib/db/schema.ts and the adapter
+// registry — every adapter type must be accepted here or its indexers can't be
+// created/edited/tested through the settings API.
+export const indexerTypeSchema = z.enum([
+  "torznab",
+  "cardigann",
+  "torrentio",
+  "internet_archive",
+  "minerva",
+]);
 export const fetchModeSchema = z.enum(["direct", "flaresolverr"]);
 
 const baseFields = {
