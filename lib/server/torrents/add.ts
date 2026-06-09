@@ -10,6 +10,7 @@ import type {
   DebridItemStatus,
 } from "@/lib/debrid";
 import { isReadableMangaFile } from "@/lib/manga";
+import { isTorrentFileUrl } from "@/lib/search";
 import { env } from "@/lib/server/env";
 import { resolveInfoHash, upsertMediaItem } from "@/lib/server/media-items";
 import { toAvailability } from "@/lib/server/real-debrid/availability";
@@ -52,6 +53,15 @@ export async function addSearchResultToTorrent(
     );
   }
 
+  // Prefer the indexer's .torrent file (qBittorrent fetches it and gets the
+  // real trackers + web seeds). A bare info-hash magnet is trackerless and
+  // would rely on DHT alone — unreliable behind a no-port-forward VPN — so the
+  // fallback magnet gets default public trackers appended.
+  const source =
+    input.sourceUrl && isTorrentFileUrl(input.sourceUrl)
+      ? input.sourceUrl
+      : withDefaultTrackers(magnet);
+
   const client = new QBittorrentClient();
   if (!client.isConfigured()) {
     throw new AddTorrentError(
@@ -76,7 +86,7 @@ export async function addSearchResultToTorrent(
   });
 
   try {
-    await client.addMagnet(magnet, {
+    await client.addSource(source, {
       savePath: path.join(env.TORRENT_DOWNLOAD_DIR, infoHash),
       category: TORRENT_CATEGORY,
     });
@@ -178,4 +188,29 @@ function buildMagnetUri(infoHash: string | null, title: string): string | null {
 
   const params = new URLSearchParams({ dn: title });
   return `magnet:?xt=urn:btih:${infoHash}&${params.toString()}`;
+}
+
+/**
+ * Reliable public trackers appended to magnets that ship without their own, so
+ * peer discovery doesn't depend solely on DHT (which struggles behind a VPN
+ * with no inbound port forwarding).
+ */
+const DEFAULT_TRACKERS = [
+  "udp://tracker.opentrackr.org:1337/announce",
+  "udp://open.tracker.cl:1337/announce",
+  "udp://open.stealth.si:80/announce",
+  "udp://exodus.desync.com:6969/announce",
+  "udp://tracker.torrent.eu.org:451/announce",
+  "http://nyaa.tracker.wf:7777/announce",
+];
+
+/** Appends the default public trackers to a magnet (no-op for .torrent URLs). */
+function withDefaultTrackers(magnet: string): string {
+  if (!magnet.startsWith("magnet:")) {
+    return magnet;
+  }
+  const extra = DEFAULT_TRACKERS.map(
+    (tracker) => `&tr=${encodeURIComponent(tracker)}`,
+  ).join("");
+  return `${magnet}${extra}`;
 }

@@ -80,16 +80,18 @@ export class QBittorrentClient {
   }
 
   /**
-   * Adds a magnet, saving into `savePath` under the given `category`. Returns
-   * nothing useful (qBittorrent answers "Ok."); track the result by its info
-   * hash via {@link getTorrent}.
+   * Adds a source — either a magnet link or an `http(s)` URL to a `.torrent`
+   * file (qBittorrent fetches the latter itself, picking up its trackers and
+   * web seeds). Saves into `savePath` under the given `category`. Returns
+   * nothing useful (qBittorrent answers "Ok."); track it by info hash via
+   * {@link getTorrent}.
    */
-  async addMagnet(
-    magnet: string,
+  async addSource(
+    source: string,
     options: { savePath: string; category?: string },
   ): Promise<void> {
     const form = new FormData();
-    form.set("urls", magnet);
+    form.set("urls", source);
     form.set("savepath", options.savePath);
     form.set("autoTMM", "false");
     if (options.category) {
@@ -98,7 +100,7 @@ export class QBittorrentClient {
 
     const text = await this.requestText("/torrents/add", { method: "POST", body: form });
     if (text.trim().toLowerCase().startsWith("fail")) {
-      throw new QBittorrentError("qBittorrent rejected the magnet.");
+      throw new QBittorrentError("qBittorrent rejected the torrent source.");
     }
   }
 
