@@ -1,10 +1,6 @@
 import "server-only";
 
-import {
-  findComickId,
-  getComickPages,
-  listComickChapters,
-} from "@/lib/server/manga-providers/comick";
+import { getComickPages } from "@/lib/server/manga-providers/comick";
 import {
   findMangaDexId,
   getMangaDexPages,
@@ -28,11 +24,11 @@ export async function getMergedChapters(
   malId: number | string | undefined,
   title: string,
 ): Promise<{ chapters: ProviderChapter[]; sources: MangaProviderKey[] }> {
-  // MangaDex first so it wins ties; Comick fills chapter numbers it's missing.
-  const settled = await Promise.allSettled([
-    listFromMangaDex(malId, title),
-    listFromComick(title),
-  ]);
+  // MangaDex first so it wins ties; Comick would fill the chapters it's missing
+  // — but Comick has moved its API behind Cloudflare (old api.comick.fun is dead,
+  // api.comick.io serves the website), so its client (comick.ts) is dormant until
+  // a working endpoint exists. Add a Comick list call to this array to enable it.
+  const settled = await Promise.allSettled([listFromMangaDex(malId, title)]);
 
   const sources: MangaProviderKey[] = [];
   const byNumber = new Map<string, ProviderChapter>();
@@ -81,12 +77,4 @@ async function listFromMangaDex(
     return [];
   }
   return listMangaDexChapters(seriesId);
-}
-
-async function listFromComick(title: string): Promise<ProviderChapter[]> {
-  const comicId = await findComickId(title);
-  if (!comicId) {
-    return [];
-  }
-  return listComickChapters(comicId);
 }
