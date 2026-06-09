@@ -2,7 +2,7 @@
  * title → full chapter list → page images, served directly over HTTP. No
  * torrents, no Real-Debrid. */
 
-export type MangaProviderKey = "mangadex" | "comick";
+export type MangaProviderKey = "mangadex" | "comick" | "weebcentral";
 
 /** A single readable chapter from a provider. */
 export type ProviderChapter = {

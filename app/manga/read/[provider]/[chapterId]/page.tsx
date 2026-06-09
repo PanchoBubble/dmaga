@@ -12,7 +12,7 @@ type ReadPageProps = {
 
 export const dynamic = "force-dynamic";
 
-const PROVIDERS = new Set<MangaProviderKey>(["mangadex", "comick"]);
+const PROVIDERS = new Set<MangaProviderKey>(["mangadex", "comick", "weebcentral"]);
 
 export default async function MangaReadPage({ params, searchParams }: ReadPageProps) {
   const { provider, chapterId } = await params;

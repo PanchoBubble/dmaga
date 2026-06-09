@@ -7,6 +7,11 @@ import {
   listMangaDexChapters,
 } from "@/lib/server/manga-providers/mangadex";
 import {
+  findWeebCentralId,
+  getWeebCentralPages,
+  listWeebCentralChapters,
+} from "@/lib/server/manga-providers/weebcentral";
+import {
   chapterSortValue,
   type MangaProviderKey,
   type ProviderChapter,
@@ -24,11 +29,14 @@ export async function getMergedChapters(
   malId: number | string | undefined,
   title: string,
 ): Promise<{ chapters: ProviderChapter[]; sources: MangaProviderKey[] }> {
-  // MangaDex first so it wins ties; Comick would fill the chapters it's missing
-  // — but Comick has moved its API behind Cloudflare (old api.comick.fun is dead,
-  // api.comick.io serves the website), so its client (comick.ts) is dormant until
-  // a working endpoint exists. Add a Comick list call to this array to enable it.
-  const settled = await Promise.allSettled([listFromMangaDex(malId, title)]);
+  // MangaDex first so it wins ties; Weeb Central fills what MangaDex lacks
+  // (notably licensed titles like Solo Leveling, which MangaDex only keeps as
+  // unreadable external redirects). Comick is omitted — its API moved behind
+  // Cloudflare (api.comick.fun is dead); comick.ts stays for a future revival.
+  const settled = await Promise.allSettled([
+    listFromMangaDex(malId, title),
+    listFromWeebCentral(title),
+  ]);
 
   const sources: MangaProviderKey[] = [];
   const byNumber = new Map<string, ProviderChapter>();
@@ -65,6 +73,9 @@ export async function getChapterPages(
   if (provider === "comick") {
     return getComickPages(chapterId);
   }
+  if (provider === "weebcentral") {
+    return getWeebCentralPages(chapterId);
+  }
   return [];
 }
 
@@ -77,4 +88,12 @@ async function listFromMangaDex(
     return [];
   }
   return listMangaDexChapters(seriesId);
+}
+
+async function listFromWeebCentral(title: string): Promise<ProviderChapter[]> {
+  const seriesId = await findWeebCentralId(title);
+  if (!seriesId) {
+    return [];
+  }
+  return listWeebCentralChapters(seriesId);
 }

@@ -10,7 +10,14 @@ const ALLOWED_HOST_SUFFIXES = [
   "comick.fun",
   "comick.io",
   "pictures.comick.fun",
+  // Weeb Central image mirrors.
+  "planeptune.us",
+  "lastation.us",
+  "lowee.us",
 ];
+
+// Hosts whose CDN checks the Referer — send the site's referer, not the CDN's.
+const WEEB_CENTRAL_HOSTS = ["planeptune.us", "lastation.us", "lowee.us"];
 
 /**
  * Streams a provider page image through our server. Avoids browser CORS/referer
@@ -40,8 +47,14 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: "Host not allowed." }, { status: 403 });
   }
 
+  const referer = WEEB_CENTRAL_HOSTS.some(
+    (suffix) => target.hostname === suffix || target.hostname.endsWith(`.${suffix}`),
+  )
+    ? "https://weebcentral.com/"
+    : `${target.origin}/`;
+
   const upstream = await fetch(target.toString(), {
-    headers: { Accept: "image/*", Referer: `${target.origin}/` },
+    headers: { Accept: "image/*", Referer: referer },
     cache: "no-store",
     signal: AbortSignal.timeout(25_000),
   });
