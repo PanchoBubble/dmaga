@@ -1,5 +1,8 @@
-import "server-only";
-
+// NOTE: no `import "server-only"` here — this module is pulled in by the
+// background poller worker (lib/server/real-debrid/poller.ts), which runs under
+// plain tsx, not the Next.js bundler. `server-only` throws ERR_MODULE_NOT_FOUND
+// in that context and crash-loops the worker. It's still effectively server-only
+// (uses env + network) but must stay importable outside Next.
 import { env } from "@/lib/server/env";
 
 /**
