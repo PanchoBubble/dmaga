@@ -36,20 +36,21 @@ export async function listWeebCentralChapters(
 
   const chapters: ProviderChapter[] = [];
   const seen = new Set<string>();
-  // Each chapter is an <a href=".../chapters/{id}"> … <span>Chapter N</span>.
-  const pattern = /\/chapters\/([A-Z0-9]+)"[\s\S]{0,600}?>\s*(Chapter[^<]*?)\s*</g;
+  // Each chapter is an <a href=".../chapters/{id}"> … </a> block containing an
+  // SVG icon then a "Chapter N" title. Capture the whole anchor and pull the
+  // number from anywhere inside (the title sits well past the href).
+  const anchorPattern = /\/chapters\/([A-Z0-9]+)"[\s\S]*?<\/a>/g;
 
-  for (const match of html.matchAll(pattern)) {
+  for (const match of html.matchAll(anchorPattern)) {
     const id = match[1];
     if (seen.has(id)) {
       continue;
     }
     seen.add(id);
-    const label = match[2];
     chapters.push({
       provider: "weebcentral",
       id,
-      number: label.match(/Chapter\s+([\d.]+)/i)?.[1] ?? null,
+      number: match[0].match(/Chapter\s+([\d.]+)/i)?.[1] ?? null,
       volume: null,
       title: null,
       pages: null,
