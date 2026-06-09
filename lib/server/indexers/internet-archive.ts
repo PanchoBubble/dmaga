@@ -99,7 +99,9 @@ function normalizeDoc(
     id: `${config.id}:${doc.identifier}`,
     title,
     sizeBytes: typeof doc.item_size === "number" ? doc.item_size : undefined,
-    seeders: typeof doc.downloads === "number" ? doc.downloads : undefined,
+    // Archive.org items aren't torrents — don't report their download count as
+    // "seeds" (it's misleading and dominates seed-sorting over real torrents).
+    seeders: undefined,
     publishedAt: toIsoDate(doc.date ?? doc.publicdate),
     indexerId: config.id,
     indexerName: config.name,
