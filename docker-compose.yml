@@ -80,6 +80,10 @@ services:
       # reachable as `gluetun` on the Compose network.
       FLARESOLVERR_URL: "${FLARESOLVERR_URL:-http://gluetun:8191/v1}"
       INDEXER_PROXY_URL: "${INDEXER_PROXY_URL:-http://gluetun:8888}"
+      # Manga Cloudflare solver (byparr). Runs OFF the VPN on the normal Compose
+      # network — Cloudflare bans VPN exit IPs, and byparr (unlike FlareSolverr)
+      # clears VyManga's Turnstile challenge. So manga reads egress on the host IP.
+      MANGA_SOLVER_URL: "${MANGA_SOLVER_URL:-http://byparr:8191/v1}"
       REAL_DEBRID_CLIENT_ID: "${REAL_DEBRID_CLIENT_ID:-}"
       REAL_DEBRID_CLIENT_SECRET: "${REAL_DEBRID_CLIENT_SECRET:-}"
       MYANIMELIST_CLIENT_ID: "${MYANIMELIST_CLIENT_ID:-}"
@@ -125,6 +129,10 @@ services:
       flaresolverr:
         condition: service_started
       proxy:
+        condition: service_started
+      # Manga Cloudflare solver — only needed when reading VyManga, so don't gate
+      # startup on its health (its headless browser is slow to boot).
+      byparr:
         condition: service_started
 
   debrid-poller:
@@ -210,6 +218,27 @@ services:
     depends_on:
       gluetun:
         condition: service_healthy
+
+  # Cloudflare solver for manga providers (VyManga). byparr is a
+  # FlareSolverr-API-compatible solver (POST /v1 request.get) that clears the
+  # Turnstile/managed challenges FlareSolverr 3.3.25 can't. It runs on the NORMAL
+  # Compose network (NOT the gluetun VPN netns) on purpose: Cloudflare bans VPN
+  # exit IPs outright, so the solve must egress on the host's residential IP.
+  # The app reaches it at byparr:8191 (MANGA_SOLVER_URL). Heavier than
+  # FlareSolverr — launches a headless browser per solve (~20s) — so manga reads
+  # are slower than other providers.
+  byparr:
+    image: ghcr.io/thephaseless/byparr:latest
+    container_name: dmaga-byparr
+    restart: unless-stopped
+    # A headless browser needs more shared memory than Docker's 64MB default.
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8191/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   # Torrent client for the non-debrid download path. Rides the gluetun (VPN)
   # netns (killswitch-protected), writes completed files to the shared

@@ -26,13 +26,19 @@ build:
 	docker compose build
 
 # Reliable teardown: never hangs, keeps postgres-data / redis-data / downloads.
-# --depend removes each container together with anything that shares its netns
-# (proxy/flaresolverr ride on gluetun via `network_mode: service:gluetun`,
-# so they must go before it); --ignore swallows the already-removed ones that
-# cascade leaves behind.
+# Stop everything first (no ordering constraints), then force-remove. The netns
+# siblings (proxy/flaresolverr ride gluetun via `network_mode: service:gluetun`)
+# can block gluetun's removal, so we do a second pass to clear any straggler.
+# Plain `stop`/`rm -f` (no `--depend`/`--ignore`/`-t`) keeps this portable across
+# docker (the server) and podman (dev) — those flags are podman-only.
 down:
 	@ids=$$(docker ps -aq --filter name='dmaga-'); \
-	if [ -n "$$ids" ]; then docker rm -f --depend --ignore -t 10 $$ids; else echo "No dmaga containers to remove."; fi
+	if [ -z "$$ids" ]; then echo "No dmaga containers to remove."; else \
+	  docker stop $$ids >/dev/null 2>&1 || true; \
+	  docker rm -f $$ids >/dev/null 2>&1 || true; \
+	  rest=$$(docker ps -aq --filter name='dmaga-'); \
+	  if [ -n "$$rest" ]; then docker rm -f $$rest; fi; \
+	fi
 	-@docker network rm dmaga_default 2>/dev/null
 
 # Restart without rebuilding (code changes hot-reload via the bind mount).

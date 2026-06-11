@@ -3,28 +3,30 @@ import "server-only";
 import { env } from "@/lib/server/env";
 
 /**
- * Fetches a Cloudflare-challenged page through FlareSolverr (already in the
- * Compose stack, riding the gluetun VPN netns — see docker-compose.yml). Used by
- * providers like VyManga whose series/chapter pages sit behind a "Just a
- * moment…" JS challenge that plain fetch can't clear. Mirrors the proven
- * `request.get` call in lib/server/indexers/fetch.ts, but takes a bare URL
- * instead of an IndexerConfig.
+ * Fetches a Cloudflare-challenged page through the manga Cloudflare solver
+ * (byparr — see env.MANGA_SOLVER_URL). Used by providers like VyManga whose
+ * series/chapter pages sit behind a Turnstile/managed challenge that plain fetch
+ * (and FlareSolverr) can't clear. byparr exposes the FlareSolverr `/v1`
+ * `request.get` API, so the call shape matches lib/server/indexers/fetch.ts.
+ *
+ * NOTE: the solver must run OFF the VPN — Cloudflare bans VPN exit IPs outright,
+ * so a VPN-routed solve fails before it starts.
  *
  * Returns the solved page HTML, or throws — providers catch and degrade.
  */
-type FlaresolverrResponse = {
+type SolverResponse = {
   status?: string;
   message?: string;
   solution?: { response?: string };
 };
 
-export async function solveGet(url: string, timeoutMs = 30_000): Promise<string> {
-  // Give FlareSolverr's own challenge solving headroom beyond our wait budget.
+export async function solveGet(url: string, timeoutMs = 45_000): Promise<string> {
+  // Give the solver's own challenge solving headroom beyond our wait budget.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs + 10_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs + 15_000);
 
   try {
-    const response = await fetch(env.FLARESOLVERR_URL, {
+    const response = await fetch(env.MANGA_SOLVER_URL, {
       method: "POST",
       signal: controller.signal,
       headers: { "Content-Type": "application/json" },
@@ -32,13 +34,13 @@ export async function solveGet(url: string, timeoutMs = 30_000): Promise<string>
     });
 
     if (!response.ok) {
-      throw new Error(`FlareSolverr request failed (HTTP ${response.status}).`);
+      throw new Error(`Manga solver request failed (HTTP ${response.status}).`);
     }
 
-    const payload = (await response.json()) as FlaresolverrResponse;
+    const payload = (await response.json()) as SolverResponse;
     if (payload.status !== "ok" || typeof payload.solution?.response !== "string") {
       throw new Error(
-        `FlareSolverr could not solve ${url}: ${payload.message ?? "unknown error"}.`,
+        `Manga solver could not solve ${url}: ${payload.message ?? "unknown error"}.`,
       );
     }
 

@@ -18,6 +18,14 @@ const envSchema = z.object({
   REDIS_URL: z.string().default("redis://localhost:6379"),
   FLARESOLVERR_URL: z.string().default("http://localhost:8191/v1"),
   /**
+   * Cloudflare solver for manga providers (VyManga). Uses byparr — a
+   * FlareSolverr-API-compatible solver that clears the Turnstile/managed
+   * challenges FlareSolverr can't. Runs OFF the VPN (Cloudflare bans VPN exit
+   * IPs), so manga reads egress on the host IP. In the Compose stack it's
+   * reachable at byparr:8191.
+   */
+  MANGA_SOLVER_URL: z.string().default("http://localhost:8191/v1"),
+  /**
    * HTTP proxy for outbound indexer lookups only. In the Compose stack this
    * points at a proxy that egresses through the NordVPN container, so indexer
    * search traffic is the only thing routed over the VPN. Unset → direct.
