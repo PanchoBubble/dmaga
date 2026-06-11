@@ -4,7 +4,8 @@ import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { ChapterReader } from "@/components/chapter-reader";
+import { ChapterReader, type ChapterProgressMeta } from "@/components/chapter-reader";
+import type { ProgressResponse } from "@/lib/progress";
 
 type PagesResponse = { pages: string[] };
 
@@ -21,15 +22,18 @@ export function ChapterPages({
   title,
   backHref,
   sourceUrl,
+  progress,
 }: {
   provider: string;
   chapterId: string;
   title: string;
   backHref: string;
   sourceUrl: string | null;
+  progress?: ChapterProgressMeta;
 }) {
   const [pages, setPages] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resumePage, setResumePage] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -37,6 +41,20 @@ export function ChapterPages({
       try {
         setPages(null);
         setError(null);
+        // Resume point (best-effort) — fetch alongside the pages.
+        if (progress) {
+          void fetch(`/api/manga/progress?seriesKey=${encodeURIComponent(progress.seriesKey)}`, {
+            signal: controller.signal,
+          })
+            .then((r) => (r.ok ? (r.json() as Promise<ProgressResponse>) : null))
+            .then((p) => {
+              const unit = p?.units[progress.unitKey];
+              if (unit && !unit.completed && unit.lastPage > 0) {
+                setResumePage(unit.lastPage);
+              }
+            })
+            .catch(() => {});
+        }
         const params = new URLSearchParams({ provider, id: chapterId });
         const response = await fetch(`/api/manga/chapter-pages?${params}`, {
           signal: controller.signal,
@@ -54,10 +72,18 @@ export function ChapterPages({
       }
     })();
     return () => controller.abort();
-  }, [provider, chapterId]);
+  }, [provider, chapterId, progress]);
 
   if (pages && pages.length > 0) {
-    return <ChapterReader backHref={backHref} pages={pages} title={title} />;
+    return (
+      <ChapterReader
+        backHref={backHref}
+        pages={pages}
+        progress={progress}
+        resumePage={resumePage}
+        title={title}
+      />
+    );
   }
 
   return (

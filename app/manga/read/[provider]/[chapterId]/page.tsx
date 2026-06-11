@@ -2,6 +2,9 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { ChapterPages } from "@/components/chapter-pages";
+import type { ChapterProgressMeta } from "@/components/chapter-reader";
+import { parseMangaCatalogSlug } from "@/lib/manga";
+import { chapterUnitKey, malSeriesKey, nativeSeriesKey } from "@/lib/progress";
 import type { MangaProviderKey } from "@/lib/server/manga-providers/types";
 
 type ReadPageProps = {
@@ -59,10 +62,51 @@ export default async function MangaReadPage({ params, searchParams }: ReadPagePr
       backHref={backHref}
       chapterId={chapterId}
       provider={provider}
+      progress={buildProgressMeta({ provider, chapterId, t, ch, s, sid })}
       sourceUrl={sourceUrl}
       title={title}
     />
   );
+}
+
+/**
+ * Builds the reading-progress identity for this chapter, or undefined when we
+ * can't key it (no series context). Native series key on `sid`; MAL key on the
+ * `mal-{id}` slug `s`.
+ */
+function buildProgressMeta({
+  provider,
+  chapterId,
+  t,
+  ch,
+  s,
+  sid,
+}: {
+  provider: string;
+  chapterId: string;
+  t?: string;
+  ch?: string;
+  s?: string;
+  sid?: string;
+}): ChapterProgressMeta | undefined {
+  const malId = s ? parseMangaCatalogSlug(s) : null;
+  const seriesKey = sid
+    ? nativeSeriesKey(provider, sid)
+    : malId
+      ? malSeriesKey(malId)
+      : null;
+  if (!seriesKey || !t) {
+    return undefined;
+  }
+  return {
+    seriesKey,
+    source: sid ? provider : "mal",
+    title: t,
+    provider,
+    chapterId,
+    number: ch ?? null,
+    unitKey: chapterUnitKey(ch, chapterId),
+  };
 }
 
 function decodeBase64Url(value: string): string | null {

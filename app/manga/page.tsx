@@ -2,6 +2,7 @@ import { Compass } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
+import { ContinueReading } from "@/components/continue-reading";
 import { MangaSearch } from "@/components/manga-search";
 import type { MangaCatalogItem } from "@/lib/manga";
 import { fetchTopManga } from "@/lib/server/metadata/jikan-manga";
@@ -48,6 +49,8 @@ export default async function MangaPage() {
       </header>
 
       <MangaSearch />
+
+      <ContinueReading />
 
       {rows.map((row) =>
         row.items.length ? (

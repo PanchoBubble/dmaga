@@ -180,6 +180,61 @@ export const viewedTitles = pgTable(
   ],
 );
 
+/**
+ * Series-level reading progress — one row per series the user has opened, used
+ * for the "Continue reading" rail and to resume the last chapter. `seriesKey` is
+ * canonical: `mal:{id}` for the MAL catalog path, or `{provider}:{seriesId}` for
+ * provider-native series (e.g. VyManga). `mediaKind` is "manga" today; the shape
+ * is generic so anime/series episode progress can reuse it later.
+ */
+export const readProgress = pgTable(
+  "read_progress",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    seriesKey: text("series_key").notNull(),
+    mediaKind: text("media_kind").notNull().default("manga"),
+    source: text("source").notNull(),
+    title: text("title").notNull(),
+    coverUrl: text("cover_url"),
+    lastProvider: text("last_provider"),
+    lastChapterId: text("last_chapter_id"),
+    lastChapterNumber: text("last_chapter_number"),
+    lastPage: integer("last_page").notNull().default(0),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("read_progress_series_key_idx").on(table.seriesKey),
+    index("read_progress_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+/**
+ * Per-unit (chapter/episode) read state for a series. `unitKey` is the chapter
+ * number when known, else `id:{chapterId}` — stable per chapter so marks survive
+ * provider id quirks. `completed` drives the read/unread tick; `lastPage` the
+ * in-chapter resume point.
+ */
+export const readUnits = pgTable(
+  "read_units",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    seriesKey: text("series_key").notNull(),
+    unitKind: text("unit_kind").notNull().default("chapter"),
+    unitKey: text("unit_key").notNull(),
+    provider: text("provider").notNull(),
+    chapterId: text("chapter_id").notNull(),
+    number: text("number"),
+    completed: boolean("completed").notNull().default(false),
+    lastPage: integer("last_page").notNull().default(0),
+    pageCount: integer("page_count"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("read_units_series_unit_idx").on(table.seriesKey, table.unitKey),
+    index("read_units_series_idx").on(table.seriesKey),
+  ],
+);
+
 export const debridItems = pgTable(
   "debrid_items",
   {
