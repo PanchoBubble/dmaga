@@ -38,7 +38,11 @@ down:
 # Restart without rebuilding (code changes hot-reload via the bind mount).
 restart: down up
 
-# Pull latest main, apply migrations, and restart the running server.
+# Pull latest main, apply migrations, and restart the running server. If the
+# pull changes package.json / pnpm-lock.yaml / the Dockerfile, it auto-rebuilds
+# the image AND drops the managed node_modules/.next volumes so new deps (e.g. a
+# freshly added library) actually land at runtime instead of being shadowed by a
+# stale volume. Force that path anytime with `REBUILD=1 make update`.
 update:
 	./scripts/pull-and-restart.sh
 
