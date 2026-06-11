@@ -2,6 +2,7 @@ import "server-only";
 
 import * as cheerio from "cheerio";
 
+import { cached } from "@/lib/server/manga-providers/cache";
 import { solveGet } from "@/lib/server/manga-providers/flaresolverr";
 import type {
   DiscoverFeed,
@@ -176,6 +177,15 @@ function parseChapters($: cheerio.CheerioAPI): ProviderChapter[] {
 export async function getVyMangaSeries(
   seriesId: string,
 ): Promise<ProviderSeriesDetails> {
+  // Cache the ~20s solve for 30 min; chapter lists change slowly.
+  return cached(`vymanga:series:${seriesId}`, 30 * 60_000, () =>
+    solveVyMangaSeries(seriesId),
+  );
+}
+
+async function solveVyMangaSeries(
+  seriesId: string,
+): Promise<ProviderSeriesDetails> {
   const $ = cheerio.load(await solveGet(decodeId(seriesId)));
 
   const title = $("h1").first().text().trim();
@@ -208,9 +218,12 @@ export async function getVyMangaSeries(
 
 /** Resolves a chapter's ordered page-image URLs from its (solved) reader page. */
 export async function getVyMangaPages(chapterId: string): Promise<string[]> {
-  const $ = cheerio.load(await solveGet(decodeId(chapterId)));
-  return $("img.d-block")
-    .map((_, el) => $(el).attr("data-src")?.trim() ?? $(el).attr("src")?.trim())
-    .get()
-    .filter((src): src is string => Boolean(src) && src.startsWith("http"));
+  // Page images are immutable — cache the solve for 6h.
+  return cached(`vymanga:pages:${chapterId}`, 6 * 60 * 60_000, async () => {
+    const $ = cheerio.load(await solveGet(decodeId(chapterId)));
+    return $("img.d-block")
+      .map((_, el) => $(el).attr("data-src")?.trim() ?? $(el).attr("src")?.trim())
+      .get()
+      .filter((src): src is string => Boolean(src) && src.startsWith("http"));
+  });
 }

@@ -187,6 +187,9 @@ function SeriesGrid({ series }: { series: ProviderSeries[] }) {
           <Link
             className="group block border-2 border-foreground bg-card shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             href={`/manga/series/${item.provider}/${item.seriesId}`}
+            // No prefetch: each series page is a ~20s byparr Cloudflare solve, so
+            // hover/viewport prefetch would flood the solver and stall real clicks.
+            prefetch={false}
           >
             <div className="relative aspect-[2/3] w-full overflow-hidden border-b-2 border-foreground bg-secondary">
               {item.coverUrl ? (
