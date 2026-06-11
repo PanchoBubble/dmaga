@@ -14,9 +14,13 @@ const ALLOWED_HOST_SUFFIXES = [
   "planeptune.us",
   "lastation.us",
   "lowee.us",
-  // VyManga cover/page CDN.
+  // VyManga cover CDN + the Google-hosted CDNs its readers serve pages from
+  // (Blogger/blogspot + googleusercontent — common scanlation image hosts).
   "cdnxyz.xyz",
   "vymanga.net",
+  "bp.blogspot.com",
+  "blogspot.com",
+  "googleusercontent.com",
 ];
 
 // Hosts whose CDN checks the Referer — send the site's referer, not the CDN's.
