@@ -2,7 +2,36 @@
  * title → full chapter list → page images, served directly over HTTP. No
  * torrents, no Real-Debrid. */
 
-export type MangaProviderKey = "mangadex" | "comick" | "weebcentral";
+export type MangaProviderKey = "mangadex" | "comick" | "weebcentral" | "vymanga";
+
+/** Which provider-native discover feed to pull. */
+export type DiscoverFeed = "latest" | "popular";
+
+/** A series as it appears in a discover/browse grid (no chapter detail yet). */
+export type ProviderSeries = {
+  provider: MangaProviderKey;
+  /** Provider-specific series id (used to resolve details/chapters). */
+  seriesId: string;
+  title: string;
+  coverUrl: string | null;
+  /** Latest chapter label when the feed reports one (e.g. "Chapter 210"). */
+  latestChapter: string | null;
+};
+
+/** Full series detail for the provider-native series page. */
+export type ProviderSeriesDetails = ProviderSeries & {
+  description: string | null;
+  status: string | null;
+  genres: string[];
+  author: string | null;
+  chapters: ProviderChapter[];
+};
+
+/** A browsable genre/tag exposed by a provider. */
+export type ProviderGenre = {
+  id: string;
+  name: string;
+};
 
 /** A single readable chapter from a provider. */
 export type ProviderChapter = {

@@ -21,6 +21,7 @@
   "dependencies": {
     "@hookform/resolvers": "latest",
     "@radix-ui/react-slot": "latest",
+    "cheerio": "^1.0.0",
     "class-variance-authority": "latest",
     "clsx": "latest",
     "drizzle-orm": "^0.45.2",

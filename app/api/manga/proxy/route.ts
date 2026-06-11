@@ -14,10 +14,14 @@ const ALLOWED_HOST_SUFFIXES = [
   "planeptune.us",
   "lastation.us",
   "lowee.us",
+  // VyManga cover/page CDN.
+  "cdnxyz.xyz",
+  "vymanga.net",
 ];
 
 // Hosts whose CDN checks the Referer — send the site's referer, not the CDN's.
 const WEEB_CENTRAL_HOSTS = ["planeptune.us", "lastation.us", "lowee.us"];
+const VYMANGA_HOSTS = ["cdnxyz.xyz", "vymanga.net"];
 
 /**
  * Streams a provider page image through our server. Avoids browser CORS/referer
@@ -47,11 +51,16 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: "Host not allowed." }, { status: 403 });
   }
 
-  const referer = WEEB_CENTRAL_HOSTS.some(
-    (suffix) => target.hostname === suffix || target.hostname.endsWith(`.${suffix}`),
-  )
+  const matchesHost = (hosts: string[]) =>
+    hosts.some(
+      (suffix) => target.hostname === suffix || target.hostname.endsWith(`.${suffix}`),
+    );
+
+  const referer = matchesHost(WEEB_CENTRAL_HOSTS)
     ? "https://weebcentral.com/"
-    : `${target.origin}/`;
+    : matchesHost(VYMANGA_HOSTS)
+      ? "https://vymanga.net/"
+      : `${target.origin}/`;
 
   const upstream = await fetch(target.toString(), {
     headers: { Accept: "image/*", Referer: referer },

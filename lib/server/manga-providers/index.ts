@@ -12,12 +12,26 @@ import {
   listWeebCentralChapters,
 } from "@/lib/server/manga-providers/weebcentral";
 import {
+  getVyMangaPages,
+  getVyMangaSeries,
+  listVyMangaByGenre,
+  listVyMangaFeed,
+  listVyMangaGenres,
+} from "@/lib/server/manga-providers/vymanga";
+import {
   chapterSortValue,
+  type DiscoverFeed,
   type MangaProviderKey,
   type ProviderChapter,
+  type ProviderGenre,
+  type ProviderSeries,
+  type ProviderSeriesDetails,
 } from "@/lib/server/manga-providers/types";
 
 export type { ProviderChapter } from "@/lib/server/manga-providers/types";
+
+/** Providers that expose a browsable discover feed / native series pages. */
+export const DISCOVER_PROVIDERS: MangaProviderKey[] = ["vymanga"];
 
 /**
  * Builds the merged chapter list for a manga from all providers: dedupes by
@@ -33,6 +47,10 @@ export async function getMergedChapters(
   // (notably licensed titles like Solo Leveling, which MangaDex only keeps as
   // unreadable external redirects). Comick is omitted — its API moved behind
   // Cloudflare (api.comick.fun is dead); comick.ts stays for a future revival.
+  // VyManga is intentionally NOT merged here: its chapters need a FlareSolverr
+  // solve (~10-40s), which would gate every MAL manga page on a slow headless
+  // round-trip. VyManga reading is served by its provider-native series route
+  // (/manga/series/vymanga/...) instead, reached via Discover.
   const settled = await Promise.allSettled([
     listFromMangaDex(malId, title),
     listFromWeebCentral(title),
@@ -76,7 +94,72 @@ export async function getChapterPages(
   if (provider === "weebcentral") {
     return getWeebCentralPages(chapterId);
   }
+  if (provider === "vymanga") {
+    return getVyMangaPages(chapterId);
+  }
   return [];
+}
+
+/**
+ * Provider-native discover feed (latest/popular), aggregated across providers
+ * that support browsing. Each provider is isolated — a failing one drops out.
+ */
+export async function getDiscoverFeed(
+  feed: DiscoverFeed,
+  page: number,
+  provider?: MangaProviderKey,
+): Promise<ProviderSeries[]> {
+  const providers = provider ? [provider] : DISCOVER_PROVIDERS;
+  const settled = await Promise.allSettled(
+    providers.map((key) => discoverFor(key).listFeed(feed, page)),
+  );
+  return settled.flatMap((result) =>
+    result.status === "fulfilled" ? result.value : [],
+  );
+}
+
+/** Browse one provider's genre by id. */
+export async function getDiscoverByGenre(
+  provider: MangaProviderKey,
+  genreId: string,
+  page: number,
+): Promise<ProviderSeries[]> {
+  return discoverFor(provider).listByGenre(genreId, page);
+}
+
+/** A provider's genre list for the browse filter. */
+export async function getGenres(
+  provider: MangaProviderKey,
+): Promise<ProviderGenre[]> {
+  return discoverFor(provider).listGenres();
+}
+
+/** Full provider-native series detail (header + chapters), keyed by provider. */
+export async function getSeriesNative(
+  provider: MangaProviderKey,
+  seriesId: string,
+): Promise<ProviderSeriesDetails> {
+  return discoverFor(provider).getSeries(seriesId);
+}
+
+type DiscoverCapability = {
+  listFeed: (feed: DiscoverFeed, page: number) => Promise<ProviderSeries[]>;
+  listByGenre: (genreId: string, page: number) => Promise<ProviderSeries[]>;
+  listGenres: () => Promise<ProviderGenre[]>;
+  getSeries: (seriesId: string) => Promise<ProviderSeriesDetails>;
+};
+
+/** Per-provider discover implementations. Extend as providers gain browsing. */
+function discoverFor(provider: MangaProviderKey): DiscoverCapability {
+  if (provider === "vymanga") {
+    return {
+      listFeed: listVyMangaFeed,
+      listByGenre: listVyMangaByGenre,
+      listGenres: listVyMangaGenres,
+      getSeries: getVyMangaSeries,
+    };
+  }
+  throw new Error(`Provider "${provider}" does not support discover.`);
 }
 
 async function listFromMangaDex(
@@ -97,3 +180,4 @@ async function listFromWeebCentral(title: string): Promise<ProviderChapter[]> {
   }
   return listWeebCentralChapters(seriesId);
 }
+

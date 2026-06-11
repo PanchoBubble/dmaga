@@ -7,18 +7,29 @@ import type { MangaProviderKey } from "@/lib/server/manga-providers/types";
 
 type ReadPageProps = {
   params: Promise<{ provider: string; chapterId: string }>;
-  searchParams: Promise<{ ch?: string; t?: string; s?: string }>;
+  searchParams: Promise<{ ch?: string; t?: string; s?: string; sid?: string }>;
 };
 
 export const dynamic = "force-dynamic";
 
-const PROVIDERS = new Set<MangaProviderKey>(["mangadex", "comick", "weebcentral"]);
+const PROVIDERS = new Set<MangaProviderKey>([
+  "mangadex",
+  "comick",
+  "weebcentral",
+  "vymanga",
+]);
 
 export default async function MangaReadPage({ params, searchParams }: ReadPageProps) {
   const { provider, chapterId } = await params;
-  const { ch, t, s } = await searchParams;
+  const { ch, t, s, sid } = await searchParams;
 
-  const backHref = s ? `/manga/${s}` : "/manga";
+  // Native provider series (sid) link back to the provider-native series page;
+  // MAL-path titles (s) link back to the MAL title page.
+  const backHref = sid
+    ? `/manga/series/${provider}/${sid}`
+    : s
+      ? `/manga/${s}`
+      : "/manga";
   const title = [t, ch ? `Chapter ${ch}` : null].filter(Boolean).join(" · ") || "Reader";
 
   let pages: string[] = [];

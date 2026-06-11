@@ -1,3 +1,4 @@
+import { Compass } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -30,11 +31,20 @@ export default async function MangaPage() {
 
   return (
     <div className="space-y-6">
-      <header className="border-2 border-foreground bg-card p-4 shadow-line">
-        <h1 className="text-2xl font-black">Manga</h1>
-        <p className="mt-1 text-sm font-semibold text-muted-foreground">
-          Search manga by title, cover, and metadata, then find readable sources.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3 border-2 border-foreground bg-card p-4 shadow-line">
+        <div>
+          <h1 className="text-2xl font-black">Manga</h1>
+          <p className="mt-1 text-sm font-semibold text-muted-foreground">
+            Search manga by title, cover, and metadata, then find readable sources.
+          </p>
+        </div>
+        <Link
+          className="inline-flex items-center gap-2 border-2 border-foreground bg-[hsl(134deg_40%_82%)] px-3 py-2 text-sm font-black shadow-line transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          href="/manga/discover"
+        >
+          <Compass className="size-4" />
+          Browse
+        </Link>
       </header>
 
       <MangaSearch />
