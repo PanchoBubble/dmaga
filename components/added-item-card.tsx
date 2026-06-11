@@ -677,7 +677,7 @@ const KIND_RANK: Record<PlaybackKind, number> = {
   other: 3,
 };
 
-/** Orders a pack's files by kind (playable first), then largest first. */
+/** Orders a pack's files by kind (playable first), then by natural file name. */
 function sortPackFiles(links: AddedItemLinkDto[]): AddedItemLinkDto[] {
   return [...links].sort((a, b) => {
     const rankDelta =
@@ -686,7 +686,10 @@ function sortPackFiles(links: AddedItemLinkDto[]): AddedItemLinkDto[] {
     if (rankDelta !== 0) {
       return rankDelta;
     }
-    return (b.fileSizeBytes ?? 0) - (a.fileSizeBytes ?? 0);
+    return a.fileName.localeCompare(b.fileName, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
   });
 }
 
