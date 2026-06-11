@@ -45,6 +45,11 @@ export async function solveGet(url: string, timeoutMs = 45_000): Promise<string>
     }
 
     return payload.solution.response;
+  } catch (cause) {
+    if (cause instanceof Error && cause.name === "AbortError") {
+      throw new Error(`Manga solver timed out solving ${url}.`);
+    }
+    throw cause;
   } finally {
     clearTimeout(timer);
   }

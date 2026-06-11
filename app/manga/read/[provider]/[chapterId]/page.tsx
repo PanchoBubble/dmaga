@@ -1,8 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
-import { ChapterReader } from "@/components/chapter-reader";
-import { getChapterPages } from "@/lib/server/manga-providers";
+import { ChapterPages } from "@/components/chapter-pages";
 import type { MangaProviderKey } from "@/lib/server/manga-providers/types";
 
 type ReadPageProps = {
@@ -32,25 +31,7 @@ export default async function MangaReadPage({ params, searchParams }: ReadPagePr
       : "/manga";
   const title = [t, ch ? `Chapter ${ch}` : null].filter(Boolean).join(" · ") || "Reader";
 
-  let pages: string[] = [];
-  let errorMessage: string | null = null;
-
   if (!PROVIDERS.has(provider as MangaProviderKey)) {
-    errorMessage = "Unknown reading provider.";
-  } else {
-    try {
-      const urls = await getChapterPages(provider as MangaProviderKey, chapterId);
-      pages = urls.map((url) => `/api/manga/proxy?u=${encodeURIComponent(url)}`);
-      if (pages.length === 0) {
-        errorMessage = "This chapter has no readable pages.";
-      }
-    } catch (error) {
-      errorMessage =
-        error instanceof Error ? error.message : "Unable to load this chapter.";
-    }
-  }
-
-  if (errorMessage) {
     return (
       <div className="space-y-4">
         <Link
@@ -61,12 +42,33 @@ export default async function MangaReadPage({ params, searchParams }: ReadPagePr
           Back
         </Link>
         <div className="border-2 border-dashed border-foreground bg-background p-8 text-center">
-          <p className="text-lg font-black">Can&apos;t open this chapter</p>
-          <p className="mt-2 text-sm text-muted-foreground">{errorMessage}</p>
+          <p className="text-lg font-black">Unknown reading provider.</p>
         </div>
       </div>
     );
   }
 
-  return <ChapterReader backHref={backHref} pages={pages} title={title} />;
+  // For VyManga the chapter id is the base64url of the source reader URL — decode
+  // it so the reader can offer an "open on VyManga" fallback when image
+  // extraction fails (protected readers).
+  const sourceUrl =
+    provider === "vymanga" ? decodeBase64Url(chapterId) : null;
+
+  return (
+    <ChapterPages
+      backHref={backHref}
+      chapterId={chapterId}
+      provider={provider}
+      sourceUrl={sourceUrl}
+      title={title}
+    />
+  );
+}
+
+function decodeBase64Url(value: string): string | null {
+  try {
+    return Buffer.from(value, "base64url").toString("utf8");
+  } catch {
+    return null;
+  }
 }

@@ -5,7 +5,12 @@ import type { MangaProviderKey } from "@/lib/server/manga-providers/types";
 
 export const dynamic = "force-dynamic";
 
-const PROVIDERS = new Set<MangaProviderKey>(["mangadex", "comick", "weebcentral"]);
+const PROVIDERS = new Set<MangaProviderKey>([
+  "mangadex",
+  "comick",
+  "weebcentral",
+  "vymanga",
+]);
 
 export async function GET(request: NextRequest) {
   const provider = request.nextUrl.searchParams.get("provider")?.trim();
