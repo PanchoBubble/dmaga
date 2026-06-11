@@ -1,20 +1,20 @@
-import { Clapperboard, Search, Settings, Star, Upload } from "lucide-react";
+import { Clapperboard, ListChecks, Search, Settings, Star } from "lucide-react";
 
 export const navigationItems = [
   {
     href: "/",
-    label: "Search",
-    icon: Search,
-  },
-  {
-    href: "/discover",
     label: "Discover",
     icon: Clapperboard,
   },
   {
+    href: "/search",
+    label: "Search",
+    icon: Search,
+  },
+  {
     href: "/added",
-    label: "RD",
-    icon: Upload,
+    label: "Tracked",
+    icon: ListChecks,
   },
   {
     href: "/saved",

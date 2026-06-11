@@ -1,6 +1,8 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ChevronRight, ExternalLink } from "lucide-react";
+import useEmblaCarousel from "embla-carousel-react";
+import { Reorder, useDragControls } from "framer-motion";
+import { Check, ChevronRight, ExternalLink, GripVertical, Pencil } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
@@ -13,89 +15,128 @@ import type { MyAnimeListAnime } from "@/lib/myanimelist";
 
 export function DiscoverRows({ initialRows }: { initialRows: DiscoverRow[] }) {
   const [rows, setRows] = useState(initialRows);
+  const [editing, setEditing] = useState(false);
 
-  function moveRow(index: number, direction: -1 | 1) {
-    const target = index + direction;
-    if (target < 0 || target >= rows.length) {
-      return;
-    }
-
-    const next = [...rows];
-    [next[index], next[target]] = [next[target], next[index]];
+  function handleReorder(next: DiscoverRow[]) {
     setRows(next);
     void persistOrder(next.map((row) => row.id));
   }
 
   return (
-    <section className="space-y-6">
-      {rows.map((row, index) => (
-        <section className="space-y-3" key={row.id}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              {row.kind !== "mal" ? (
-                <Link
-                  className="inline-flex items-center gap-1 hover:text-muted-foreground"
-                  href={row.href}
-                >
-                  <h2 className="text-xl font-black">{row.title}</h2>
-                  <ChevronRight className="size-4" />
-                </Link>
-              ) : (
-                <h2 className="text-xl font-black">{row.title}</h2>
-              )}
-            </div>
+    <section className="space-y-4">
+      <div className="flex items-center justify-end">
+        <Button
+          aria-pressed={editing}
+          className="gap-1.5"
+          onClick={() => setEditing((value) => !value)}
+          size="sm"
+          type="button"
+          variant={editing ? "default" : "outline"}
+        >
+          {editing ? (
+            <>
+              <Check className="size-4" />
+              Done
+            </>
+          ) : (
+            <>
+              <Pencil className="size-4" />
+              Reorder
+            </>
+          )}
+        </Button>
+      </div>
 
-            <div className="flex items-center gap-1">
-              {row.kind !== "mal" ? (
-                <Link
-                  className="mr-2 hidden text-sm font-bold text-muted-foreground hover:text-foreground sm:inline-flex"
-                  href={row.href}
-                >
-                  See all
-                </Link>
-              ) : null}
-              <Button
-                aria-label={`Move ${row.title} up`}
-                className="size-8"
-                disabled={index === 0}
-                onClick={() => moveRow(index, -1)}
-                size="icon"
-                type="button"
-                variant="outline"
-              >
-                <ArrowUp className="size-4" />
-              </Button>
-              <Button
-                aria-label={`Move ${row.title} down`}
-                className="size-8"
-                disabled={index === rows.length - 1}
-                onClick={() => moveRow(index, 1)}
-                size="icon"
-                type="button"
-                variant="outline"
-              >
-                <ArrowDown className="size-4" />
-              </Button>
-            </div>
-          </div>
-
-          <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2">
-            {row.kind === "catalog"
-              ? row.items.map((item) => (
-                  <div
-                    className="w-32 shrink-0 sm:w-36"
-                    key={`${item.type}:${item.id}`}
-                  >
-                    <PosterCard item={item} />
-                  </div>
-                ))
-              : row.kind === "manga"
-                ? row.items.map((item) => <MangaCard item={item} key={item.slug} />)
-                : row.items.map((item) => <AnimeCard item={item} key={item.id} />)}
-          </div>
-        </section>
-      ))}
+      <Reorder.Group
+        as="div"
+        axis="y"
+        className="space-y-6"
+        onReorder={handleReorder}
+        values={rows}
+      >
+        {rows.map((row) => (
+          <DiscoverRowItem editing={editing} key={row.id} row={row} />
+        ))}
+      </Reorder.Group>
     </section>
+  );
+}
+
+function DiscoverRowItem({ editing, row }: { editing: boolean; row: DiscoverRow }) {
+  const dragControls = useDragControls();
+
+  return (
+    <Reorder.Item
+      as="section"
+      className={`space-y-3 ${editing ? "rounded border-2 border-dashed border-muted-foreground/40 bg-card/40 p-3" : ""}`}
+      dragControls={dragControls}
+      dragListener={false}
+      value={row}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {editing ? (
+            <button
+              aria-label={`Drag to reorder ${row.title}`}
+              className="cursor-grab touch-none rounded border-2 border-foreground bg-background p-1 active:cursor-grabbing"
+              onPointerDown={(event) => dragControls.start(event)}
+              type="button"
+            >
+              <GripVertical className="size-4" />
+            </button>
+          ) : null}
+          {row.kind !== "mal" && !editing ? (
+            <Link
+              className="inline-flex items-center gap-1 hover:text-muted-foreground"
+              href={row.href}
+            >
+              <h2 className="text-xl font-black">{row.title}</h2>
+              <ChevronRight className="size-4" />
+            </Link>
+          ) : (
+            <h2 className="truncate text-xl font-black">{row.title}</h2>
+          )}
+        </div>
+
+        {row.kind !== "mal" && !editing ? (
+          <Link
+            className="mr-2 hidden text-sm font-bold text-muted-foreground hover:text-foreground sm:inline-flex"
+            href={row.href}
+          >
+            See all
+          </Link>
+        ) : null}
+      </div>
+
+      <RowCarousel editing={editing} row={row} />
+    </Reorder.Item>
+  );
+}
+
+function RowCarousel({ editing, row }: { editing: boolean; row: DiscoverRow }) {
+  const [emblaRef] = useEmblaCarousel({
+    align: "start",
+    containScroll: "trimSnaps",
+    dragFree: true,
+    // While reordering, freeze horizontal drag so it can't fight the vertical
+    // row drag started from the grip handle.
+    watchDrag: !editing,
+  });
+
+  return (
+    <div className="-mx-1 overflow-hidden px-1 pb-2" ref={emblaRef}>
+      <div className="flex gap-3">
+        {row.kind === "catalog"
+          ? row.items.map((item) => (
+              <div className="w-32 shrink-0 sm:w-36" key={`${item.type}:${item.id}`}>
+                <PosterCard item={item} />
+              </div>
+            ))
+          : row.kind === "manga"
+            ? row.items.map((item) => <MangaCard item={item} key={item.slug} />)
+            : row.items.map((item) => <AnimeCard item={item} key={item.id} />)}
+      </div>
+    </div>
   );
 }
 
